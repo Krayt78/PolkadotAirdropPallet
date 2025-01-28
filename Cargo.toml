@@ -6,12 +6,13 @@ repository = "https://github.com/paritytech/polkadot-sdk-minimal-template.git"
 edition = "2021"
 
 [workspace]
-members = ["node", "pallets/template", "runtime"]
+members = ["node", "pallets/airdrop", "pallets/template", "runtime"]
 resolver = "2"
 
 [workspace.dependencies]
 minimal-template-runtime = { path = "./runtime", default-features = false }
 pallet-minimal-template = { path = "./pallets/template", default-features = false }
+pallet-airdrop = { path = "./pallets/airdrop", default-features = false }
 clap = { version = "4.5.10" }
 docify = { version = "0.2.8" }
 futures = { version = "0.3.30" }
