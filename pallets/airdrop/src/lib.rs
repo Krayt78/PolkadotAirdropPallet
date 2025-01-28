@@ -10,9 +10,95 @@ use polkadot_sdk::polkadot_sdk_frame as frame;
 // Re-export all pallet parts, this is needed to properly import the pallet into the runtime.
 pub use pallet::*;
 
-use crate::frame::derive::{RuntimeDebug, TypeInfo};
+use frame::deps::sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
+use frame::deps::sp_runtime;
+use frame::derive::{RuntimeDebug, TypeInfo};
+use frame::testing_prelude::*;
+use frame::traits::{CheckedSub, Currency, VestingSchedule};
+// use crate::frame_system::Event;
 use codec::{Decode, Encode, MaxEncodedLen};
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+
+type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
+    <T as frame_system::Config>::AccountId,
+>>::Currency;
+type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+pub trait WeightInfo {
+    fn claim() -> Weight;
+    fn mint_claim() -> Weight;
+    fn claim_attest() -> Weight;
+    fn attest() -> Weight;
+    fn move_claim() -> Weight;
+    fn prevalidate_attests() -> Weight;
+}
+
+pub struct TestWeightInfo;
+impl WeightInfo for TestWeightInfo {
+    fn claim() -> Weight {
+        Weight::zero()
+    }
+    fn mint_claim() -> Weight {
+        Weight::zero()
+    }
+    fn claim_attest() -> Weight {
+        Weight::zero()
+    }
+    fn attest() -> Weight {
+        Weight::zero()
+    }
+    fn move_claim() -> Weight {
+        Weight::zero()
+    }
+    fn prevalidate_attests() -> Weight {
+        Weight::zero()
+    }
+}
+
+/// The kind of statement an account needs to make for a claim to be valid.
+#[derive(
+    Encode,
+    Decode,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    RuntimeDebug,
+    TypeInfo,
+    Serialize,
+    Deserialize,
+    MaxEncodedLen,
+)]
+pub enum StatementKind {
+    /// Statement required to be made by non-SAFT holders.
+    Regular,
+    /// Statement required to be made by SAFT holders.
+    Saft,
+}
+
+impl StatementKind {
+    /// Convert this to the (English) statement it represents.
+    fn to_text(self) -> &'static [u8] {
+        match self {
+            StatementKind::Regular => {
+                &b"I hereby agree to the terms of the statement whose SHA-256 multihash is \
+				Qmc1XYqT6S39WNp2UeiRUrZichUWUPpGEThDE6dAb3f6Ny. (This may be found at the URL: \
+				https://statement.polkadot.network/regular.html)"[..]
+            }
+            StatementKind::Saft => {
+                &b"I hereby agree to the terms of the statement whose SHA-256 multihash is \
+				QmXEkMahfhHJPzT3RjkXiZVFi77ZeVeuxtAjhojGRNYckz. (This may be found at the URL: \
+				https://statement.polkadot.network/saft.html)"[..]
+            }
+        }
+    }
+}
+
+impl Default for StatementKind {
+    fn default() -> Self {
+        StatementKind::Regular
+    }
+}
 
 /// An Ethereum address (i.e. 20 bytes, used to represent an Ethereum account).
 ///
@@ -53,13 +139,352 @@ impl<'de> Deserialize<'de> for EthereumAddress {
     }
 }
 
+#[derive(Encode, Decode, Clone, TypeInfo, MaxEncodedLen)]
+pub struct EcdsaSignature(pub [u8; 65]);
+
+impl PartialEq for EcdsaSignature {
+    fn eq(&self, other: &Self) -> bool {
+        &self.0[..] == &other.0[..]
+    }
+}
+
+impl core::fmt::Debug for EcdsaSignature {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "EcdsaSignature({:?})", &self.0[..])
+    }
+}
+
 #[frame::pallet]
 pub mod pallet {
     use super::*;
 
     #[pallet::config]
-    pub trait Config: polkadot_sdk::frame_system::Config {}
+    pub trait Config: polkadot_sdk::frame_system::Config {
+        // type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+        type VestingSchedule: VestingSchedule<Self::AccountId, Moment = BlockNumberFor<Self>>;
+        #[pallet::constant]
+        type Prefix: Get<&'static [u8]>;
+        type MoveClaimOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+        type WeightInfo: WeightInfo;
+    }
+
+    // #[pallet::event]
+    // #[pallet::generate_deposit(pub(super) fn deposit_event)]
+    // pub enum Event<T: Config> {
+    // 	/// Someone claimed some DOTs.
+    // 	Claimed { who: T::AccountId, ethereum_address: EthereumAddress, amount: BalanceOf<T> },
+    // }
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
+
+    #[pallet::error]
+    pub enum Error<T> {
+        /// Invalid Ethereum signature.
+        InvalidEthereumSignature,
+        /// Ethereum address has no claim.
+        SignerHasNoClaim,
+        /// Account ID sending transaction has no claim.
+        SenderHasNoClaim,
+        /// There's not enough in the pot to pay out some unvested amount. Generally implies a
+        /// logic error.
+        PotUnderflow,
+        /// A needed statement was not included.
+        InvalidStatement,
+        /// The account already has a vested balance.
+        VestedBalanceExists,
+    }
+
+    #[pallet::storage]
+    pub type Claims<T: Config> = StorageMap<_, Identity, EthereumAddress, BalanceOf<T>>;
+
+    #[pallet::storage]
+    pub type Total<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+    /// Vesting schedule for a claim.
+    /// First balance is the total amount that should be held for vesting.
+    /// Second balance is how much should be unlocked per block.
+    /// The block number is when the vesting should start.
+    #[pallet::storage]
+    pub type Vesting<T: Config> =
+        StorageMap<_, Identity, EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>;
+
+    /// The statement kind that must be signed, if any.
+    #[pallet::storage]
+    pub(super) type Signing<T> = StorageMap<_, Identity, EthereumAddress, StatementKind>;
+
+    /// Pre-claimed Ethereum accounts, by the Account ID that they are claimed to.
+    #[pallet::storage]
+    pub(super) type Preclaims<T: Config> = StorageMap<_, Identity, T::AccountId, EthereumAddress>;
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        /// Make a claim to collect your DOTs.
+        ///
+        /// The dispatch origin for this call must be _None_.
+        ///
+        /// Unsigned Validation:
+        /// A call to claim is deemed valid if the signature provided matches
+        /// the expected signed message of:
+        ///
+        /// > Ethereum Signed Message:
+        /// > (configured prefix string)(address)
+        ///
+        /// and `address` matches the `dest` account.
+        ///
+        /// Parameters:
+        /// - `dest`: The destination account to payout the claim.
+        /// - `ethereum_signature`: The signature of an ethereum signed message matching the format
+        ///   described above.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// Weight includes logic to validate unsigned `claim` call.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
+        #[pallet::call_index(0)]
+        #[pallet::weight(T::WeightInfo::claim())]
+        pub fn claim(
+            origin: OriginFor<T>,
+            dest: T::AccountId,
+            ethereum_signature: EcdsaSignature,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
+
+            let data = dest.using_encoded(to_ascii_hex);
+            let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
+                .ok_or(Error::<T>::InvalidEthereumSignature)?;
+            ensure!(
+                Signing::<T>::get(&signer).is_none(),
+                Error::<T>::InvalidStatement
+            );
+
+            Self::process_claim(signer, dest)?;
+            Ok(())
+        }
+
+        /// Mint a new claim to collect DOTs.
+        ///
+        /// The dispatch origin for this call must be _Root_.
+        ///
+        /// Parameters:
+        /// - `who`: The Ethereum address allowed to collect this claim.
+        /// - `value`: The number of DOTs that will be claimed.
+        /// - `vesting_schedule`: An optional vesting schedule for these DOTs.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// We assume worst case that both vesting and statement is being inserted.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
+        #[pallet::call_index(1)]
+        #[pallet::weight(T::WeightInfo::mint_claim())]
+        pub fn mint_claim(
+            origin: OriginFor<T>,
+            who: EthereumAddress,
+            value: BalanceOf<T>,
+            vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
+            statement: Option<StatementKind>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            Total::<T>::mutate(|t| *t += value);
+            Claims::<T>::insert(who, value);
+            if let Some(vs) = vesting_schedule {
+                Vesting::<T>::insert(who, vs);
+            }
+            if let Some(s) = statement {
+                Signing::<T>::insert(who, s);
+            }
+            Ok(())
+        }
+
+        /// Make a claim to collect your DOTs by signing a statement.
+        ///
+        /// The dispatch origin for this call must be _None_.
+        ///
+        /// Unsigned Validation:
+        /// A call to `claim_attest` is deemed valid if the signature provided matches
+        /// the expected signed message of:
+        ///
+        /// > Ethereum Signed Message:
+        /// > (configured prefix string)(address)(statement)
+        ///
+        /// and `address` matches the `dest` account; the `statement` must match that which is
+        /// expected according to your purchase arrangement.
+        ///
+        /// Parameters:
+        /// - `dest`: The destination account to payout the claim.
+        /// - `ethereum_signature`: The signature of an ethereum signed message matching the format
+        ///   described above.
+        /// - `statement`: The identity of the statement which is being attested to in the
+        ///   signature.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// Weight includes logic to validate unsigned `claim_attest` call.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
+        #[pallet::call_index(2)]
+        #[pallet::weight(T::WeightInfo::claim_attest())]
+        pub fn claim_attest(
+            origin: OriginFor<T>,
+            dest: T::AccountId,
+            ethereum_signature: EcdsaSignature,
+            statement: Vec<u8>,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
+
+            let data = dest.using_encoded(to_ascii_hex);
+            let signer = Self::eth_recover(&ethereum_signature, &data, &statement)
+                .ok_or(Error::<T>::InvalidEthereumSignature)?;
+            if let Some(s) = Signing::<T>::get(signer) {
+                ensure!(s.to_text() == &statement[..], Error::<T>::InvalidStatement);
+            }
+            Self::process_claim(signer, dest)?;
+            Ok(())
+        }
+
+        /// Attest to a statement, needed to finalize the claims process.
+        ///
+        /// WARNING: Insecure unless your chain includes `PrevalidateAttests` as a
+        /// `TransactionExtension`.
+        ///
+        /// Unsigned Validation:
+        /// A call to attest is deemed valid if the sender has a `Preclaim` registered
+        /// and provides a `statement` which is expected for the account.
+        ///
+        /// Parameters:
+        /// - `statement`: The identity of the statement which is being attested to in the
+        ///   signature.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// Weight includes logic to do pre-validation on `attest` call.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
+        #[pallet::call_index(3)]
+        #[pallet::weight((
+			T::WeightInfo::attest(),
+			DispatchClass::Normal,
+			Pays::No
+		))]
+        pub fn attest(origin: OriginFor<T>, statement: Vec<u8>) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+            let signer = Preclaims::<T>::get(&who).ok_or(Error::<T>::SenderHasNoClaim)?;
+            if let Some(s) = Signing::<T>::get(signer) {
+                ensure!(s.to_text() == &statement[..], Error::<T>::InvalidStatement);
+            }
+            Self::process_claim(signer, who.clone())?;
+            Preclaims::<T>::remove(&who);
+            Ok(())
+        }
+
+        #[pallet::call_index(4)]
+        #[pallet::weight(T::WeightInfo::move_claim())]
+        pub fn move_claim(
+            origin: OriginFor<T>,
+            old: EthereumAddress,
+            new: EthereumAddress,
+            maybe_preclaim: Option<T::AccountId>,
+        ) -> DispatchResultWithPostInfo {
+            T::MoveClaimOrigin::try_origin(origin)
+                .map(|_| ())
+                .or_else(ensure_root)?;
+
+            Claims::<T>::take(&old).map(|c| Claims::<T>::insert(&new, c));
+            Vesting::<T>::take(&old).map(|c| Vesting::<T>::insert(&new, c));
+            Signing::<T>::take(&old).map(|c| Signing::<T>::insert(&new, c));
+            maybe_preclaim.map(|preclaim| {
+                Preclaims::<T>::mutate(&preclaim, |maybe_o| {
+                    if maybe_o.as_ref().map_or(false, |o| o == &old) {
+                        *maybe_o = Some(new)
+                    }
+                })
+            });
+            Ok(Pays::No.into())
+        }
+    }
+}
+
+/// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
+fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
+    let mut r = Vec::with_capacity(data.len() * 2);
+    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
+    for &b in data.iter() {
+        push_nibble(b / 16);
+        push_nibble(b % 16);
+    }
+    r
+}
+
+impl<T: Config> Pallet<T> {
+    // Constructs the message that Ethereum RPC's `personal_sign` and `eth_sign` would sign.
+    fn ethereum_signable_message(what: &[u8], extra: &[u8]) -> Vec<u8> {
+        let prefix = T::Prefix::get();
+        let mut l = prefix.len() + what.len() + extra.len();
+        let mut rev = Vec::new();
+        while l > 0 {
+            rev.push(b'0' + (l % 10) as u8);
+            l /= 10;
+        }
+        let mut v = b"\x19Ethereum Signed Message:\n".to_vec();
+        v.extend(rev.into_iter().rev());
+        v.extend_from_slice(prefix);
+        v.extend_from_slice(what);
+        v.extend_from_slice(extra);
+        v
+    }
+
+    // Attempts to recover the Ethereum address from a message signature signed by using
+    // the Ethereum RPC's `personal_sign` and `eth_sign`.
+    fn eth_recover(s: &EcdsaSignature, what: &[u8], extra: &[u8]) -> Option<EthereumAddress> {
+        let msg = keccak_256(&Self::ethereum_signable_message(what, extra));
+        let mut res = EthereumAddress::default();
+        res.0
+            .copy_from_slice(&keccak_256(&secp256k1_ecdsa_recover(&s.0, &msg).ok()?[..])[12..]);
+        Some(res)
+    }
+
+    fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> sp_runtime::DispatchResult {
+        let balance_due = Claims::<T>::get(&signer).ok_or(Error::<T>::SignerHasNoClaim)?;
+
+        let new_total = Total::<T>::get()
+            .checked_sub(&balance_due)
+            .ok_or(Error::<T>::PotUnderflow)?;
+
+        let vesting = Vesting::<T>::get(&signer);
+        if vesting.is_some() && T::VestingSchedule::vesting_balance(&dest).is_some() {
+            return Err(Error::<T>::VestedBalanceExists.into());
+        }
+
+        // We first need to deposit the balance to ensure that the account exists.
+        let _ = CurrencyOf::<T>::deposit_creating(&dest, balance_due);
+
+        // Check if this claim should have a vesting schedule.
+        if let Some(vs) = vesting {
+            // This can only fail if the account already has a vesting schedule,
+            // but this is checked above.
+            T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)
+                .expect("No other vesting schedule exists, as checked above; qed");
+        }
+
+        Total::<T>::put(new_total);
+        Claims::<T>::remove(&signer);
+        Vesting::<T>::remove(&signer);
+        Signing::<T>::remove(&signer);
+
+        // Let's deposit an event to let the outside world know this happened.
+        // Self::deposit_event(Event::<T>::Claimed {
+        // 	who: dest,
+        // 	ethereum_address: signer,
+        // 	amount: balance_due,
+        // });
+
+        Ok(())
+    }
 }

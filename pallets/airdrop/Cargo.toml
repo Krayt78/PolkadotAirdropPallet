@@ -27,3 +27,9 @@ std = [
   "serde/std",
   "rustc-hex/std",
 ]
+runtime-benchmarks = [
+	"polkadot-sdk/runtime-benchmarks",
+]
+try-runtime = [
+	"polkadot-sdk/try-runtime",
+]
