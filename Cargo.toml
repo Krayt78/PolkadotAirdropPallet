@@ -17,8 +17,10 @@ clap = { version = "4.5.10" }
 docify = { version = "0.2.8" }
 futures = { version = "0.3.30" }
 futures-timer = { version = "3.0.2" }
+serde = { version = "1.0.214", default-features = false }
 jsonrpsee = { version = "0.24.3" }
 polkadot-sdk = { version = "0.7.0", default-features = false }
 serde_json = { version = "1.0.127", default-features = false }
 codec = { version = "3.6.12", default-features = false, package = "parity-scale-codec" }
 scale-info = { version = "2.11.1", default-features = false }
+rustc-hex = { version = "2.1.0", default-features = false }

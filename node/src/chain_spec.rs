@@ -17,9 +17,9 @@
 
 use minimal_template_runtime::{BalancesConfig, SudoConfig, WASM_BINARY};
 use polkadot_sdk::{
-	sc_service::{ChainType, Properties},
-	sp_keyring::AccountKeyring,
-	*,
+    sc_service::{ChainType, Properties},
+    sp_keyring::AccountKeyring,
+    *,
 };
 use serde_json::{json, Value};
 
@@ -27,32 +27,35 @@ use serde_json::{json, Value};
 pub type ChainSpec = sc_service::GenericChainSpec;
 
 fn props() -> Properties {
-	let mut properties = Properties::new();
-	properties.insert("tokenDecimals".to_string(), 0.into());
-	properties.insert("tokenSymbol".to_string(), "MINI".into());
-	properties
+    let mut properties = Properties::new();
+    properties.insert("tokenDecimals".to_string(), 0.into());
+    properties.insert("tokenSymbol".to_string(), "MINI".into());
+    properties
 }
 
 pub fn development_config() -> Result<ChainSpec, String> {
-	Ok(ChainSpec::builder(WASM_BINARY.expect("Development wasm not available"), Default::default())
-		.with_name("Development")
-		.with_id("dev")
-		.with_chain_type(ChainType::Development)
-		.with_genesis_config_patch(testnet_genesis())
-		.with_properties(props())
-		.build())
+    Ok(ChainSpec::builder(
+        WASM_BINARY.expect("Development wasm not available"),
+        Default::default(),
+    )
+    .with_name("Development")
+    .with_id("dev")
+    .with_chain_type(ChainType::Development)
+    .with_genesis_config_patch(testnet_genesis())
+    .with_properties(props())
+    .build())
 }
 
 /// Configure initial storage state for FRAME pallets.
 fn testnet_genesis() -> Value {
-	use minimal_template_runtime::interface::{Balance, MinimumBalance};
-	use polkadot_sdk::polkadot_sdk_frame::traits::Get;
-	let endowment = <MinimumBalance as Get<Balance>>::get().max(1) * 1000;
-	let balances = AccountKeyring::iter()
-		.map(|a| (a.to_account_id(), endowment))
-		.collect::<Vec<_>>();
-	json!({
-		"balances": BalancesConfig { balances },
-		"sudo": SudoConfig { key: Some(AccountKeyring::Alice.to_account_id()) },
-	})
+    use minimal_template_runtime::interface::{Balance, MinimumBalance};
+    use polkadot_sdk::polkadot_sdk_frame::traits::Get;
+    let endowment = <MinimumBalance as Get<Balance>>::get().max(1) * 1000;
+    let balances = AccountKeyring::iter()
+        .map(|a| (a.to_account_id(), endowment))
+        .collect::<Vec<_>>();
+    json!({
+        "balances": BalancesConfig { balances },
+        "sudo": SudoConfig { key: Some(AccountKeyring::Alice.to_account_id()) },
+    })
 }

@@ -7330,7 +7330,9 @@ version = "0.1.0"
 dependencies = [
  "parity-scale-codec",
  "polkadot-sdk",
+ "rustc-hex",
  "scale-info",
+ "serde",
 ]
 
 [[package]]

@@ -12,11 +12,11 @@ pub use pallet::*;
 
 #[frame::pallet]
 pub mod pallet {
-	use super::*;
+    use super::*;
 
-	#[pallet::config]
-	pub trait Config: polkadot_sdk::frame_system::Config {}
+    #[pallet::config]
+    pub trait Config: polkadot_sdk::frame_system::Config {}
 
-	#[pallet::pallet]
-	pub struct Pallet<T>(_);
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
 }
