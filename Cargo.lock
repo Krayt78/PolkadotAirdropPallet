@@ -6584,6 +6584,7 @@ dependencies = [
 name = "minimal-template-runtime"
 version = "0.1.0"
 dependencies = [
+ "pallet-airdrop",
  "pallet-minimal-template",
  "parity-scale-codec",
  "polkadot-sdk",
