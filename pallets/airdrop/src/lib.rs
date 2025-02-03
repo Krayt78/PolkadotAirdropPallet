@@ -197,8 +197,11 @@ pub mod pallet {
         ) -> DispatchResult {
             ensure_none(origin)?;
 
-            let signer = Self::eth_recover(&ethereum_signature, &dest.encode(), &[][..])
+            let data = dest.using_encoded(to_ascii_hex);
+			let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
                 .ok_or(Error::<T>::InvalidEthereumSignature)?;
+
+            println!("{:?}", signer);
 
             Self::process_claim(signer, dest)?;
             Ok(())
@@ -260,6 +263,17 @@ pub mod pallet {
             Ok(Pays::No.into())
         }
     }
+}
+
+/// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
+fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
+    let mut r = Vec::with_capacity(data.len() * 2);
+    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
+    for &b in data.iter() {
+        push_nibble(b / 16);
+        push_nibble(b % 16);
+    }
+    r
 }
 
 impl<T: Config> Pallet<T> {
@@ -435,17 +449,6 @@ mod tests {
         fn move_claim() -> Weight { Weight::from_parts(0, 0) }
     }
 
-    /// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
-    fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
-        let mut r = Vec::with_capacity(data.len() * 2);
-        let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
-        for &b in data.iter() {
-            push_nibble(b / 16);
-            push_nibble(b % 16);
-        }
-        r
-    }
-
     // Helper functions for generating test accounts and signatures
     fn alice() -> libsecp256k1::SecretKey {
         libsecp256k1::SecretKey::parse(&keccak_256(b"Alice")).unwrap()
@@ -520,9 +523,12 @@ mod tests {
     #[test]
     fn claim_works() {
         new_test_ext().execute_with(|| {
+            assert_eq!(Balances::free_balance(42), 0);
             let claim_amount = 100;
-            let dest_account = 42;
+            let dest_account = 42u64;
             let eth_address = eth(&alice());
+
+            println!("eth_address: {:?}", eth_address);
 
             // Register a claim
             assert_ok!(Claims::register_claim(RuntimeOrigin::root(), eth_address, claim_amount));
@@ -532,11 +538,16 @@ mod tests {
             assert_eq!(Claims::total(), claim_amount);
             assert_eq!(pallet_balances::Pallet::<Test>::free_balance(&dest_account), 0);
 
+            let signature = sig::<Test>(&alice(), &dest_account.encode(), &[][..]);
+
+            // Log the signature with println!
+            println!("{:?}", signature.0);
+
             // Claim tokens
             assert_ok!(Claims::claim(
                 RuntimeOrigin::none(),
                 dest_account,
-                sig::<Test>(&alice(), &dest_account.encode(), &[][..])
+                signature
             ));
 
             // Check final state
@@ -638,10 +649,10 @@ mod tests {
     fn real_eth_sig_works() {
         new_test_ext().execute_with(|| {
             // "Pay RUSTs to the TEST account:2a00000000000000"
-            let sig = hex!("444023e89b67e67c0562ed0305d252a5dd12b2af5ac51d6d3cb69a0b486bc4b3191401802dc29d26d586221f7256cd3329fe82174bdf659baea149a40e1c495d1c");
+            let sig = hex!("583d568a6fb8340bdaa270773c2f63843141baeea20a6ca5ab4433c74636b4746b2cf570f07ea80f973e836ac3976778e0d3c624a9799835fefa666bfacb891c1c");
             let sig = EcdsaSignature(sig);
             let dest = 42u64.encode();
-            let addr = hex!("12Cb274aAD8251C875c0bf6872b67d9983E53fDd");
+            let addr = hex!("c29aab429a74f28b5e0952e2a07142a50dfa17e4");
             let addr = EthereumAddress(addr);
             let claim_amount = 100;
 
