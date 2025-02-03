@@ -13,10 +13,15 @@ scale-info = { features = ["derive"], workspace = true }
 polkadot-sdk = { workspace = true, features = [
   "experimental",
   "runtime",
+  "pallet-balances",
 ], default-features = false }
 serde = { features = ["alloc"], workspace = true }
 rustc-hex = { workspace = true }
+libsecp256k1 = { version = "0.7", default-features = false }
+hex-literal = { version = "0.4.1", optional = true }
 
+[dev-dependencies]
+hex-literal = "0.4.1"
 
 [features]
 default = ["std"]
@@ -26,10 +31,11 @@ std = [
   "scale-info/std",
   "serde/std",
   "rustc-hex/std",
+  "libsecp256k1/std",
 ]
 runtime-benchmarks = [
-	"polkadot-sdk/runtime-benchmarks",
+  "polkadot-sdk/runtime-benchmarks",
 ]
 try-runtime = [
-	"polkadot-sdk/try-runtime",
+  "polkadot-sdk/try-runtime",
 ]
