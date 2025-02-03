@@ -10,50 +10,18 @@ use polkadot_sdk::polkadot_sdk_frame as frame;
 // Re-export all pallet parts, this is needed to properly import the pallet into the runtime.
 pub use pallet::*;
 
+use frame::deps::frame_support::PalletId;
 use frame::deps::sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 use frame::deps::sp_runtime;
 use frame::derive::{RuntimeDebug, TypeInfo};
 use frame::testing_prelude::*;
-use frame::traits::{CheckedSub, Currency, VestingSchedule};
+use frame::traits::{CheckedSub, Currency, ExistenceRequirement, Get, AccountIdConversion};
 // use crate::frame_system::Event;
 use codec::{Decode, Encode, MaxEncodedLen};
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
-type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
-    <T as frame_system::Config>::AccountId,
->>::Currency;
-type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-pub trait WeightInfo {
-    fn claim() -> Weight;
-    fn mint_claim() -> Weight;
-    fn claim_attest() -> Weight;
-    fn attest() -> Weight;
-    fn move_claim() -> Weight;
-    fn prevalidate_attests() -> Weight;
-}
-
-pub struct TestWeightInfo;
-impl WeightInfo for TestWeightInfo {
-    fn claim() -> Weight {
-        Weight::zero()
-    }
-    fn mint_claim() -> Weight {
-        Weight::zero()
-    }
-    fn claim_attest() -> Weight {
-        Weight::zero()
-    }
-    fn attest() -> Weight {
-        Weight::zero()
-    }
-    fn move_claim() -> Weight {
-        Weight::zero()
-    }
-    fn prevalidate_attests() -> Weight {
-        Weight::zero()
-    }
-}
+type BalanceOf<T> =
+    <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// The kind of statement an account needs to make for a claim to be valid.
 #[derive(
@@ -154,29 +122,54 @@ impl core::fmt::Debug for EcdsaSignature {
     }
 }
 
+pub trait WeightInfo {
+    fn claim() -> Weight;
+    fn register_claim() -> Weight;
+    fn claim_attest() -> Weight;
+    fn attest() -> Weight;
+    fn move_claim() -> Weight;
+}
+
+pub struct TestWeightInfo;
+impl WeightInfo for TestWeightInfo {
+    fn claim() -> Weight {
+        Weight::zero()
+    }
+    fn register_claim() -> Weight {
+        Weight::zero()
+    }
+    fn claim_attest() -> Weight {
+        Weight::zero()
+    }
+    fn attest() -> Weight {
+        Weight::zero()
+    }
+    fn move_claim() -> Weight {
+        Weight::zero()
+    }
+}
+
 #[frame::pallet]
 pub mod pallet {
     use super::*;
 
+    pub const PALLET_ID: PalletId = PalletId(*b"airdrop!");
+
     #[pallet::config]
     pub trait Config: polkadot_sdk::frame_system::Config {
-        // type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-        type VestingSchedule: VestingSchedule<Self::AccountId, Moment = BlockNumberFor<Self>>;
+        /// The currency mechanism.
+        type Currency: Currency<Self::AccountId>;
+
+        /// The origin which may forcibly move a claim from one account to another.
+        type MoveClaimOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
+        /// Weight information for extrinsics in this pallet.
+        type WeightInfo: WeightInfo;
+
+        /// The prefix used in signed messages
         #[pallet::constant]
         type Prefix: Get<&'static [u8]>;
-        type MoveClaimOrigin: EnsureOrigin<Self::RuntimeOrigin>;
-        type WeightInfo: WeightInfo;
     }
-
-    // #[pallet::event]
-    // #[pallet::generate_deposit(pub(super) fn deposit_event)]
-    // pub enum Event<T: Config> {
-    // 	/// Someone claimed some DOTs.
-    // 	Claimed { who: T::AccountId, ethereum_address: EthereumAddress, amount: BalanceOf<T> },
-    // }
-
-    #[pallet::pallet]
-    pub struct Pallet<T>(_);
 
     #[pallet::error]
     pub enum Error<T> {
@@ -191,23 +184,18 @@ pub mod pallet {
         PotUnderflow,
         /// A needed statement was not included.
         InvalidStatement,
-        /// The account already has a vested balance.
-        VestedBalanceExists,
+        /// Not enough balance in pallet account
+        InsufficientPalletBalance,
     }
+
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
 
     #[pallet::storage]
     pub type Claims<T: Config> = StorageMap<_, Identity, EthereumAddress, BalanceOf<T>>;
 
     #[pallet::storage]
     pub type Total<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
-
-    /// Vesting schedule for a claim.
-    /// First balance is the total amount that should be held for vesting.
-    /// Second balance is how much should be unlocked per block.
-    /// The block number is when the vesting should start.
-    #[pallet::storage]
-    pub type Vesting<T: Config> =
-        StorageMap<_, Identity, EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>;
 
     /// The statement kind that must be signed, if any.
     #[pallet::storage]
@@ -219,7 +207,7 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Make a claim to collect your DOTs.
+        /// Make a claim to collect your tokens.
         ///
         /// The dispatch origin for this call must be _None_.
         ///
@@ -264,14 +252,14 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Mint a new claim to collect DOTs.
+        /// Register a new claim to collect tokens from the pallet account.
         ///
         /// The dispatch origin for this call must be _Root_.
         ///
         /// Parameters:
         /// - `who`: The Ethereum address allowed to collect this claim.
-        /// - `value`: The number of DOTs that will be claimed.
-        /// - `vesting_schedule`: An optional vesting schedule for these DOTs.
+        /// - `value`: The number of tokens that will be claimed.
+        /// - `statement`: An optional statement that must be signed by the claimant.
         ///
         /// <weight>
         /// The weight of this call is invariant over the input parameters.
@@ -280,28 +268,31 @@ pub mod pallet {
         /// Total Complexity: O(1)
         /// </weight>
         #[pallet::call_index(1)]
-        #[pallet::weight(T::WeightInfo::mint_claim())]
-        pub fn mint_claim(
+        #[pallet::weight(T::WeightInfo::register_claim())]
+        pub fn register_claim(
             origin: OriginFor<T>,
             who: EthereumAddress,
             value: BalanceOf<T>,
-            vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
             statement: Option<StatementKind>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
+            // Check if pallet account has enough balance
+            let pallet_account = Self::account_id();
+            ensure!(
+                T::Currency::free_balance(&pallet_account) >= value,
+                Error::<T>::InsufficientPalletBalance
+            );
+
             Total::<T>::mutate(|t| *t += value);
             Claims::<T>::insert(who, value);
-            if let Some(vs) = vesting_schedule {
-                Vesting::<T>::insert(who, vs);
-            }
             if let Some(s) = statement {
                 Signing::<T>::insert(who, s);
             }
             Ok(())
         }
 
-        /// Make a claim to collect your DOTs by signing a statement.
+        /// Make a claim to collect your tokens by signing a statement.
         ///
         /// The dispatch origin for this call must be _None_.
         ///
@@ -397,7 +388,6 @@ pub mod pallet {
                 .or_else(ensure_root)?;
 
             Claims::<T>::take(&old).map(|c| Claims::<T>::insert(&new, c));
-            Vesting::<T>::take(&old).map(|c| Vesting::<T>::insert(&new, c));
             Signing::<T>::take(&old).map(|c| Signing::<T>::insert(&new, c));
             maybe_preclaim.map(|preclaim| {
                 Preclaims::<T>::mutate(&preclaim, |maybe_o| {
@@ -411,19 +401,13 @@ pub mod pallet {
     }
 }
 
-/// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
-fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
-    let mut r = Vec::with_capacity(data.len() * 2);
-    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
-    for &b in data.iter() {
-        push_nibble(b / 16);
-        push_nibble(b % 16);
-    }
-    r
-}
-
 impl<T: Config> Pallet<T> {
-    // Constructs the message that Ethereum RPC's `personal_sign` and `eth_sign` would sign.
+    /// The account ID of the pallet.
+    pub fn account_id() -> T::AccountId {
+        PALLET_ID.into_account_truncating()
+    }
+
+    /// Constructs the message that Ethereum RPC's `personal_sign` and `eth_sign` would sign.
     fn ethereum_signable_message(what: &[u8], extra: &[u8]) -> Vec<u8> {
         let prefix = T::Prefix::get();
         let mut l = prefix.len() + what.len() + extra.len();
@@ -457,34 +441,30 @@ impl<T: Config> Pallet<T> {
             .checked_sub(&balance_due)
             .ok_or(Error::<T>::PotUnderflow)?;
 
-        let vesting = Vesting::<T>::get(&signer);
-        if vesting.is_some() && T::VestingSchedule::vesting_balance(&dest).is_some() {
-            return Err(Error::<T>::VestedBalanceExists.into());
-        }
-
-        // We first need to deposit the balance to ensure that the account exists.
-        let _ = CurrencyOf::<T>::deposit_creating(&dest, balance_due);
-
-        // Check if this claim should have a vesting schedule.
-        if let Some(vs) = vesting {
-            // This can only fail if the account already has a vesting schedule,
-            // but this is checked above.
-            T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)
-                .expect("No other vesting schedule exists, as checked above; qed");
-        }
+        // Transfer tokens from pallet account to the destination account
+        let pallet_account = Self::account_id();
+        T::Currency::transfer(
+            &pallet_account,
+            &dest,
+            balance_due,
+            ExistenceRequirement::KeepAlive,
+        )?;
 
         Total::<T>::put(new_total);
         Claims::<T>::remove(&signer);
-        Vesting::<T>::remove(&signer);
         Signing::<T>::remove(&signer);
-
-        // Let's deposit an event to let the outside world know this happened.
-        // Self::deposit_event(Event::<T>::Claimed {
-        // 	who: dest,
-        // 	ethereum_address: signer,
-        // 	amount: balance_due,
-        // });
 
         Ok(())
     }
+}
+
+/// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
+fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
+    let mut r = Vec::with_capacity(data.len() * 2);
+    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
+    for &b in data.iter() {
+        push_nibble(b / 16);
+        push_nibble(b % 16);
+    }
+    r
 }
