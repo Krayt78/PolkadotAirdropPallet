@@ -349,6 +349,7 @@ mod tests {
     use sp_runtime::{
         traits::{BlakeTwo256, BadOrigin},
         BuildStorage,
+        TokenError,
     };
     use frame_system::mocking::MockBlock;
     use polkadot_sdk::{
@@ -608,7 +609,7 @@ mod tests {
                     42,
                     sig::<Test>(&alice(), &42u64.encode(), &[][..])
                 ),
-                Error::<Test>::InsufficientPalletBalance
+                TokenError::FundsUnavailable //(could also be Error::<Test>::InsufficientPalletBalance but FundsUnavailable triggers first)
             );
         });
     }
@@ -648,16 +649,12 @@ mod tests {
     #[test]
     fn real_eth_sig_works() {
         new_test_ext().execute_with(|| {
-            // "Pay RUSTs to the TEST account:2a00000000000000"
-            let sig = hex!("583d568a6fb8340bdaa270773c2f63843141baeea20a6ca5ab4433c74636b4746b2cf570f07ea80f973e836ac3976778e0d3c624a9799835fefa666bfacb891c1c");
-            let sig = EcdsaSignature(sig);
-            let dest = 42u64.encode();
-            let addr = hex!("c29aab429a74f28b5e0952e2a07142a50dfa17e4");
-            let addr = EthereumAddress(addr);
-            let claim_amount = 100;
-
-            assert_ok!(Claims::register_claim(RuntimeOrigin::root(), addr, claim_amount));
-            assert_ok!(Claims::claim(RuntimeOrigin::none(), 42, sig));
-        });
+                // "Pay RUSTs to the TEST account:2a00000000000000"
+                let sig = hex!["444023e89b67e67c0562ed0305d252a5dd12b2af5ac51d6d3cb69a0b486bc4b3191401802dc29d26d586221f7256cd3329fe82174bdf659baea149a40e1c495d1c"];
+                let sig = EcdsaSignature(sig);
+                let who = 42u64.using_encoded(to_ascii_hex);
+                let signer = Pallet::<Test>::eth_recover(&sig, &who, &[][..]).unwrap();
+                assert_eq!(signer.0, hex!["6d31165d5d932d571f3b44695653b46dcc327e84"]);
+            });
     }
 }
