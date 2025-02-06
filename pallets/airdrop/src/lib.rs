@@ -439,12 +439,14 @@ mod tests {
 
     parameter_types! {
         pub Prefix: &'static [u8] = b"Pay RUSTs to the TEST account:";
+        pub const PotId: PalletId = PalletId(*b"airdrop!");
     }
 
     impl Config for Test {
         type RuntimeEvent = RuntimeEvent;
         type Currency = Balances;
-        type WeightInfo = TestWeightInfo;
+      //  type WeightInfo = TestWeightInfo;
+      type PotId = PotId;
         type Prefix = Prefix;
         type MoveClaimOrigin = frame_system::EnsureRoot<u64>;
     }

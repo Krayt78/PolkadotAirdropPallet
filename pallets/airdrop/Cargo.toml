@@ -10,7 +10,7 @@ edition.workspace = true
 [dependencies]
 codec = { features = ["derive"], workspace = true }
 frame-benchmarking = { workspace = true }
-hex-literal = { version = "0.4.1", optional = true }
+hex-literal = "0.4.1"
 libsecp256k1 = { version = "0.7", default-features = false }
 polkadot-sdk = { workspace = true, features = [
 	"experimental",
