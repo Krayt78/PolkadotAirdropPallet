@@ -11,9 +11,10 @@ publish = false
 
 [dependencies]
 codec = { workspace = true }
-scale-info = { workspace = true }
-polkadot-sdk = { workspace = true, features = ["experimental", "pallet-balances", "pallet-sudo", "pallet-timestamp", "pallet-transaction-payment", "pallet-transaction-payment-rpc-runtime-api", "runtime"] }
+pallet-airdrop.workspace = true
 pallet-minimal-template.workspace = true
+polkadot-sdk = { workspace = true, features = ["experimental", "pallet-balances", "pallet-sudo", "pallet-timestamp", "pallet-transaction-payment", "pallet-transaction-payment-rpc-runtime-api", "pallet-vesting", "runtime"] }
+scale-info = { workspace = true }
 
 [build-dependencies]
 polkadot-sdk = { optional = true, workspace = true, features = ["substrate-wasm-builder"] }
@@ -22,6 +23,7 @@ polkadot-sdk = { optional = true, workspace = true, features = ["substrate-wasm-
 default = ["std"]
 std = [
 	"codec/std",
+	"pallet-airdrop/std",
 	"pallet-minimal-template/std",
 	"polkadot-sdk/std",
 	"scale-info/std",

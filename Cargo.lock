@@ -700,16 +700,15 @@ checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
 name = "asset-test-utils"
-version = "20.0.0"
+version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b0a99a8fa37a58ad868fca25530dde06b6582cb46b64bfae808f5b9b87e42ce"
+checksum = "d0324df9ce91a9840632e865dd3272bd20162023856f1b189b7ae58afa5c6b61"
 dependencies = [
  "cumulus-pallet-parachain-system",
  "cumulus-pallet-xcmp-queue",
  "cumulus-primitives-core",
  "frame-support",
  "frame-system",
- "pallet-asset-conversion",
  "pallet-assets",
  "pallet-balances",
  "pallet-collator-selection",
@@ -727,7 +726,6 @@ dependencies = [
  "staging-xcm-builder",
  "staging-xcm-executor",
  "substrate-wasm-builder",
- "xcm-runtime-apis",
 ]
 
 [[package]]
@@ -1452,9 +1450,9 @@ dependencies = [
 
 [[package]]
 name = "bridge-hub-test-utils"
-version = "0.20.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "329b98c9cfa8a36beb65eebe197460e06dc3b041baf84d16c2c9862b99d1e7d2"
+checksum = "de0b3aa5fd8481a06ca16e47fd3d2d9c6abe76b27d922ec8980a853f242173b3"
 dependencies = [
  "asset-test-utils",
  "bp-header-chain",
@@ -3419,9 +3417,9 @@ dependencies = [
 
 [[package]]
 name = "emulated-integration-tests-common"
-version = "16.0.0"
+version = "14.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a2fdb16bdf43492ecf4e8ac21efcf140bb9783dded06d33a3f330123301c25b"
+checksum = "dcc6c314159f7d77597983718bdb5a470b92a5f043aae5da29e5ce2f61e0afff"
 dependencies = [
  "asset-test-utils",
  "bp-messages",
@@ -6586,6 +6584,7 @@ dependencies = [
 name = "minimal-template-runtime"
 version = "0.1.0"
 dependencies = [
+ "pallet-airdrop",
  "pallet-minimal-template",
  "parity-scale-codec",
  "polkadot-sdk",
@@ -7330,6 +7329,7 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 name = "pallet-airdrop"
 version = "0.1.0"
 dependencies = [
+ "frame-benchmarking",
  "hex-literal",
  "libsecp256k1",
  "parity-scale-codec",
@@ -9343,9 +9343,9 @@ dependencies = [
 
 [[package]]
 name = "parachains-runtimes-test-utils"
-version = "19.0.0"
+version = "17.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d37c6a0fe791b244282e445c7ae2534217b05781a7e47ef9e391860cf3412210"
+checksum = "287d2db0a2d19466caa579a69f021bfdc6fa352f382c8395dade58d1d0c6adfe"
 dependencies = [
  "cumulus-pallet-parachain-system",
  "cumulus-pallet-xcmp-queue",
@@ -9359,7 +9359,6 @@ dependencies = [
  "pallet-session",
  "pallet-timestamp",
  "pallet-xcm",
- "parachains-common",
  "parity-scale-codec",
  "polkadot-parachain-primitives",
  "sp-consensus-aura",
@@ -9371,7 +9370,6 @@ dependencies = [
  "staging-xcm",
  "staging-xcm-executor",
  "substrate-wasm-builder",
- "xcm-runtime-apis",
 ]
 
 [[package]]
@@ -10811,9 +10809,9 @@ dependencies = [
 
 [[package]]
 name = "polkadot-sdk"
-version = "0.9.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2c074731c33587245be64bc13bbc31399ab8fbdc79241c225726bc42264fdf9"
+checksum = "eb819108697967452fa6d8d96ab4c0d48cbaa423b3156499dcb24f1cf95d6775"
 dependencies = [
  "asset-test-utils",
  "assets-common",
@@ -15153,9 +15151,9 @@ dependencies = [
 
 [[package]]
 name = "snowbridge-runtime-test-common"
-version = "0.12.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "242ad550a31ebd8e29a17beb89f1e5ddf4e657ebdf667fb9e4c0660428de4e9b"
+checksum = "893480d6cde2489051c65efb5d27fa87efe047b3b61216d8e27bb2f0509b7faf"
 dependencies = [
  "cumulus-pallet-parachain-system",
  "frame-support",

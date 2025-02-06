@@ -1,21 +1,24 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use polkadot_sdk::polkadot_sdk_frame as frame;
+use frame::{
+    prelude::*,
+};
+use scale_info::prelude::{string::String, vec::Vec};
 use polkadot_sdk::{
     frame_support::{
         self,
-        pallet_prelude::*,
         traits::{Currency, ExistenceRequirement, Get},
         PalletId,
     },
-    frame_system::{
-        pallet_prelude::*,
-    },
+
     sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256},
     sp_runtime::{
         self,
         Saturating,
         traits::{AccountIdConversion, CheckedSub},
-        RuntimeDebug,
+        RuntimeDebug, format,
+
     },
 };
 
@@ -120,8 +123,12 @@ pub mod pallet {
         /// The origin which may forcibly move a claim.
         type MoveClaimOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-        /// Weight information for extrinsics in this pallet.
-        type WeightInfo: WeightInfo;
+        /// Treasury account Id
+		#[pallet::constant]
+		type PotId: Get<PalletId>;
+
+        // Weight information for extrinsics in this pallet.
+        //type WeightInfo: WeightInfo;
     }
 
     #[pallet::storage]
@@ -161,7 +168,6 @@ pub mod pallet {
         /// There's not enough in the pot to pay out some unvested amount. Generally implies a logic error.
         InsufficientPalletBalance,
     }
-
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         /// Make a claim to collect your tokens.
@@ -189,7 +195,7 @@ pub mod pallet {
         /// Total Complexity: O(1)
         /// </weight>
         #[pallet::call_index(0)]
-        #[pallet::weight(T::WeightInfo::claim())]
+        #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
         pub fn claim(
             origin: OriginFor<T>,
             dest: T::AccountId,
@@ -201,7 +207,7 @@ pub mod pallet {
 			let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
                 .ok_or(Error::<T>::InvalidEthereumSignature)?;
 
-            println!("{:?}", signer);
+            //println!("{:?}", signer);
 
             Self::process_claim(signer, dest)?;
             Ok(())
@@ -215,7 +221,7 @@ pub mod pallet {
         /// - `who`: The Ethereum address allowed to collect this claim.
         /// - `value`: The number of tokens that will be claimed.
         #[pallet::call_index(1)]
-        #[pallet::weight(T::WeightInfo::register_claim())]
+        #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
         pub fn register_claim(
             origin: OriginFor<T>,
             who: EthereumAddress,
@@ -243,7 +249,7 @@ pub mod pallet {
         /// - `new`: The new Ethereum address.
         /// - `maybe_preclaim`: The account that should be allowed to claim the tokens.
         #[pallet::call_index(2)]
-        #[pallet::weight(T::WeightInfo::move_claim())]
+        #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
         pub fn move_claim(
             origin: OriginFor<T>,
             old: EthereumAddress,
@@ -279,7 +285,7 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
 impl<T: Config> Pallet<T> {
     /// The account ID of the pallet.
     pub fn account_id() -> T::AccountId {
-        PalletId(*b"airdrop!").into_account_truncating()
+        T::PotId::get().into_account_truncating()
     }
 
     /// Constructs the message that Ethereum RPC's `personal_sign` and `eth_sign` would sign.
@@ -433,12 +439,14 @@ mod tests {
 
     parameter_types! {
         pub Prefix: &'static [u8] = b"Pay RUSTs to the TEST account:";
+        pub const PotId: PalletId = PalletId(*b"airdrop!");
     }
 
     impl Config for Test {
         type RuntimeEvent = RuntimeEvent;
         type Currency = Balances;
-        type WeightInfo = TestWeightInfo;
+      //  type WeightInfo = TestWeightInfo;
+      type PotId = PotId;
         type Prefix = Prefix;
         type MoveClaimOrigin = frame_system::EnsureRoot<u64>;
     }
