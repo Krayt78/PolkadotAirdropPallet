@@ -31,19 +31,14 @@ use polkadot_sdk::{
     polkadot_sdk_frame::{
         self as frame,
         prelude::*,
-        runtime::{apis, prelude::*},
+        runtime::{apis, types_common::AccountId,prelude::*},
     },
     *,
 };
 use frame_support::PalletId;
 use sp_runtime::{
-	generic, impl_opaque_keys,
-	traits::{
-		AccountIdConversion, BlakeTwo256, Block as BlockT, ConstU32, ConvertInto, IdentityLookup,
-		Keccak256, OpaqueKeys, SaturatedConversion, Verify,
-	},
-	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, FixedU128, KeyTypeId, Perbill, Percent, Permill, RuntimeDebug,
+	transaction_validity::{TransactionSource, TransactionValidity},
+	ApplyExtrinsicResult,
 };
 
 /// The runtime version.
@@ -131,10 +126,6 @@ mod runtime {
     #[runtime::pallet_index(5)]
     pub type Template = pallet_minimal_template::Pallet<Runtime>;
 
-    /// Vesting. Usable initially, but removed once all vesting is finished.
-    #[runtime::pallet_index(6)]
-    pub type Vesting = pallet_vesting::Pallet<Runtime>;
-
     /// An airdrop pallet.
     #[runtime::pallet_index(7)]
     pub type Airdrop = pallet_airdrop::Pallet<Runtime>;
@@ -182,32 +173,15 @@ impl pallet_minimal_template::Config for Runtime {}
 
 parameter_types! {
     pub Prefix: &'static [u8] = b"Some prefix:";
-    pub const PotId: PalletId = PalletId(*b"py/potid");
+    pub const PotId: PalletId = PalletId(*b"airdrop!");
 }
 impl pallet_airdrop::Config for Runtime {
-    //type RuntimeEvent = RuntimeEvent;
-	type VestingSchedule = Vesting;
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
 	type Prefix = Prefix;
-    //type PotId = PotId;
+    type PotId = PotId;
 	type MoveClaimOrigin = EnsureRoot<AccountId>;
-	type WeightInfo = weights::polkadot_runtime_common_claims::WeightInfo<Runtime>;
-}
-
-parameter_types! {
-	pub const MinVestedTransfer: Balance = 100 * CENTS;
-	pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
-		WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
-}
-
-impl pallet_vesting::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type Currency = Balances;
-	type BlockNumberToBalance = ConvertInto;
-	type MinVestedTransfer = MinVestedTransfer;
-	type WeightInfo = weights::pallet_vesting::WeightInfo<Runtime>;
-	type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
-	type BlockNumberProvider = System;
-	const MAX_VESTING_SCHEDULES: u32 = 28;
+	//type WeightInfo = polkadot_sdk::polkadot_runtime_common_claims::WeightInfo<Runtime>;
 }
 
 type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;

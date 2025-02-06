@@ -10,17 +10,19 @@ members = ["node", "pallets/airdrop", "pallets/template", "runtime"]
 resolver = "2"
 
 [workspace.dependencies]
-minimal-template-runtime = { path = "./runtime", default-features = false }
-pallet-minimal-template = { path = "./pallets/template", default-features = false }
-pallet-airdrop = { path = "./pallets/airdrop", default-features = false }
 clap = { version = "4.5.10" }
+codec = { version = "3.6.12", default-features = false, package = "parity-scale-codec" }
 docify = { version = "0.2.8" }
+frame-benchmarking = { version = "38.0.0", default-features = false }
+frame-benchmarking-cli = "43.0.0"
 futures = { version = "0.3.30" }
 futures-timer = { version = "3.0.2" }
-serde = { version = "1.0.214", default-features = false }
 jsonrpsee = { version = "0.24.3" }
+minimal-template-runtime = { path = "./runtime", default-features = false }
+pallet-airdrop = { path = "./pallets/airdrop", default-features = false }
+pallet-minimal-template = { path = "./pallets/template", default-features = false }
 polkadot-sdk = { version = "0.7.0", default-features = false }
-serde_json = { version = "1.0.127", default-features = false }
-codec = { version = "3.6.12", default-features = false, package = "parity-scale-codec" }
-scale-info = { version = "2.11.1", default-features = false }
 rustc-hex = { version = "2.1.0", default-features = false }
+scale-info = { version = "2.11.1", default-features = false }
+serde = { version = "1.0.214", default-features = false }
+serde_json = { version = "1.0.127", default-features = false }
