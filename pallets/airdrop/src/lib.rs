@@ -18,6 +18,7 @@ use polkadot_sdk::{
         Saturating,
         traits::{AccountIdConversion, CheckedSub},
         RuntimeDebug, format,
+
     },
 };
 
@@ -167,7 +168,6 @@ pub mod pallet {
         /// There's not enough in the pot to pay out some unvested amount. Generally implies a logic error.
         InsufficientPalletBalance,
     }
-
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         /// Make a claim to collect your tokens.

@@ -22,6 +22,9 @@ scale-info = { features = ["derive"], workspace = true }
 serde = { features = ["alloc"], workspace = true }
 
 
+[dev-dependencies]
+hex-literal = "0.4.1"
+
 [features]
 default = ["std"]
 std = [
@@ -38,5 +41,5 @@ runtime-benchmarks = [
 	"polkadot-sdk/runtime-benchmarks",
 ]
 try-runtime = [
-	"polkadot-sdk/try-runtime",
+  "polkadot-sdk/try-runtime",
 ]
