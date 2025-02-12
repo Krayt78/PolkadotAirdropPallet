@@ -63,6 +63,20 @@ pub fn native_version() -> NativeVersion {
     }
 }
 
+/// Extension that checks if an unsigned transaction is valid for the claim extrinsic (airdrop::claim).
+// impl<T: frame_system::Config + pallet_airdrop::Config> sp_runtime::traits::ValidateUnsigned for Runtime {
+//     type Call = RuntimeCall;
+
+//     fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+//         match call {
+//             RuntimeCall::Airdrop(pallet_airdrop::Call::claim { .. }) => {
+//                 Ok(ValidTransaction::default())
+//             }
+//             _ => Err(TransactionValidityError::Invalid(InvalidTransaction::Call)),
+//         }
+//     }
+// }
+
 /// The signed extensions that are added to the runtime.
 type SignedExtra = (
     // Checks that the sender is not the zero address.
@@ -128,11 +142,15 @@ mod runtime {
 
     /// An airdrop pallet.
     #[runtime::pallet_index(7)]
+    //#[runtime::unsigned_validator(Airdrop)]  
     pub type Airdrop = pallet_airdrop::Pallet<Runtime>;
 }
 
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
+    pub Prefix: &'static [u8] = b"Some prefix:";
+    pub const PotId: PalletId = PalletId(*b"airdrop!");
+    //pub const UnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
 /// Implements the types required for the system pallet.
@@ -171,10 +189,6 @@ impl pallet_transaction_payment::Config for Runtime {
 // Implements the types required for the template pallet.
 impl pallet_minimal_template::Config for Runtime {}
 
-parameter_types! {
-    pub Prefix: &'static [u8] = b"Some prefix:";
-    pub const PotId: PalletId = PalletId(*b"airdrop!");
-}
 impl pallet_airdrop::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
@@ -182,6 +196,7 @@ impl pallet_airdrop::Config for Runtime {
     type PotId = PotId;
 	type MoveClaimOrigin = EnsureRoot<AccountId>;
 	//type WeightInfo = polkadot_sdk::polkadot_runtime_common_claims::WeightInfo<Runtime>;
+    //type UnsignedPriority = UnsignedPriority;
 }
 
 type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;

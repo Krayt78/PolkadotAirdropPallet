@@ -1,27 +1,27 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use polkadot_sdk::polkadot_sdk_frame as frame;
-use frame::{
-    prelude::*,
-};
-use scale_info::prelude::{string::String, vec::Vec};
 use polkadot_sdk::{
     frame_support::{
         self,
         traits::{Currency, ExistenceRequirement, Get},
         PalletId,
     },
-
+    frame_system,
     sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256},
     sp_runtime::{
         self,
         Saturating,
-        traits::{AccountIdConversion, CheckedSub},
-        RuntimeDebug, format,
-
+        traits::{AccountIdConversion, CheckedSub, ValidateUnsigned},
+        RuntimeDebug,
+        transaction_validity::{
+            ValidTransaction, InvalidTransaction, TransactionSource,
+            TransactionValidityError, TransactionPriority, TransactionLongevity,
+        },
     },
 };
 
+//use frame::prelude::*;
+use scale_info::prelude::{string::String, vec::Vec, format};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
@@ -30,7 +30,7 @@ use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 pub use pallet::*;
 
 type BalanceOf<T> =
-    <<T as Config>::Currency as Currency<<T as polkadot_sdk::frame_system::Config>::AccountId>>::Balance;
+    <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 pub trait WeightInfo {
     fn claim() -> Weight;
@@ -105,14 +105,16 @@ impl core::fmt::Debug for EcdsaSignature {
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: polkadot_sdk::frame_system::Config {
+    pub trait Config: frame_system::Config {
         /// The overarching event type.
-        type RuntimeEvent: From<Event<Self>> + IsType<<Self as polkadot_sdk::frame_system::Config>::RuntimeEvent>;
+        type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// The currency mechanism.
         type Currency: Currency<Self::AccountId>;
@@ -124,11 +126,11 @@ pub mod pallet {
         type MoveClaimOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
         /// Treasury account Id
-		#[pallet::constant]
-		type PotId: Get<PalletId>;
+        #[pallet::constant]
+        type PotId: Get<PalletId>;
 
-        // Weight information for extrinsics in this pallet.
-        //type WeightInfo: WeightInfo;
+        /// The priority of unsigned transactions.
+        type UnsignedPriority: Get<TransactionPriority>;
     }
 
     #[pallet::storage]
@@ -267,6 +269,38 @@ pub mod pallet {
 
             Self::deposit_event(Event::ClaimMoved { old, new });
             Ok(Pays::No.into())
+        }
+    }
+
+    #[pallet::validate_unsigned]
+    impl<T: Config> ValidateUnsigned for Pallet<T> {
+        type Call = Call<T>;
+
+        fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+            match call {
+                Call::claim { dest, ethereum_signature } => {
+                    // Get the signing address
+                    let data = dest.encode();
+                    let signer = Self::eth_recover(
+                        ethereum_signature,
+                        &data,
+                        T::Prefix::get(),
+                    ).ok_or(InvalidTransaction::Custom(1))?;
+
+                    // Check if this signer has a claim
+                    let balance = Claims::<T>::get(&signer)
+                        .ok_or(InvalidTransaction::Custom(2))?;
+
+                    Ok(ValidTransaction {
+                        priority: T::UnsignedPriority::get(),
+                        requires: vec![],
+                        provides: vec![(signer, dest.clone()).encode()],
+                        longevity: TransactionLongevity::max_value(),
+                        propagate: true,
+                    })
+                }
+                _ => Err(InvalidTransaction::Call),
+            }
         }
     }
 }
@@ -449,6 +483,7 @@ mod tests {
       type PotId = PotId;
         type Prefix = Prefix;
         type MoveClaimOrigin = frame_system::EnsureRoot<u64>;
+        type UnsignedPriority = frame_support::traits::ConstTransactionPriority<2>;
     }
 
     pub struct TestWeightInfo;
