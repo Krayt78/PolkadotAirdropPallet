@@ -3,6 +3,7 @@
 use polkadot_sdk::{
     frame_support::{
         self,
+        pallet_prelude::Weight,
         traits::{Currency, ExistenceRequirement, Get},
         PalletId,
     },
@@ -10,19 +11,18 @@ use polkadot_sdk::{
     sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256},
     sp_runtime::{
         self,
-        Saturating,
         traits::{AccountIdConversion, CheckedSub, ValidateUnsigned},
-        RuntimeDebug,
         transaction_validity::{
-            ValidTransaction, InvalidTransaction, TransactionSource,
-            TransactionValidityError, TransactionPriority, TransactionLongevity,
+            InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
+            ValidTransaction,
         },
+        RuntimeDebug, Saturating,
     },
 };
 
 //use frame::prelude::*;
-use scale_info::prelude::{string::String, vec::Vec, format};
 use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::prelude::{format, string::String, vec::Vec};
 use scale_info::TypeInfo;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
@@ -112,9 +112,10 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config {
+    pub trait Config: polkadot_sdk::frame_system::Config {
         /// The overarching event type.
-        type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+        type RuntimeEvent: From<Event<Self>>
+            + IsType<<Self as polkadot_sdk::frame_system::Config>::RuntimeEvent>;
 
         /// The currency mechanism.
         type Currency: Currency<Self::AccountId>;
@@ -143,13 +144,14 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn preclaims)]
-    pub(super) type Preclaims<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, EthereumAddress>;
+    pub(super) type Preclaims<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, EthereumAddress>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// Someone claimed some tokens. [who, ethereum_address, amount]
-        Claimed { 
+        Claimed {
             who: T::AccountId,
             ethereum_address: EthereumAddress,
             amount: BalanceOf<T>,
@@ -206,7 +208,7 @@ pub mod pallet {
             ensure_none(origin)?;
 
             let data = dest.using_encoded(to_ascii_hex);
-			let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
+            let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
                 .ok_or(Error::<T>::InvalidEthereumSignature)?;
 
             //println!("{:?}", signer);
@@ -278,18 +280,18 @@ pub mod pallet {
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
             match call {
-                Call::claim { dest, ethereum_signature } => {
+                Call::claim {
+                    dest,
+                    ethereum_signature,
+                } => {
                     // Get the signing address
                     let data = dest.encode();
-                    let signer = Self::eth_recover(
-                        ethereum_signature,
-                        &data,
-                        T::Prefix::get(),
-                    ).ok_or(InvalidTransaction::Custom(1))?;
+                    let signer = Self::eth_recover(ethereum_signature, &data, T::Prefix::get())
+                        .ok_or(InvalidTransaction::Custom(1))?;
 
                     // Check if this signer has a claim
-                    let balance = Claims::<T>::get(&signer)
-                        .ok_or(InvalidTransaction::Custom(2))?;
+                    let _balance =
+                        Claims::<T>::get(&signer).ok_or(InvalidTransaction::Custom(2))?;
 
                     Ok(ValidTransaction {
                         priority: T::UnsignedPriority::get(),
@@ -299,7 +301,7 @@ pub mod pallet {
                         propagate: true,
                     })
                 }
-                _ => Err(InvalidTransaction::Call),
+                _ => Err(InvalidTransaction::Call.into()),
             }
         }
     }
@@ -349,10 +351,7 @@ impl<T: Config> Pallet<T> {
         Some(res)
     }
 
-    fn process_claim(
-        signer: EthereumAddress,
-        dest: T::AccountId,
-    ) -> sp_runtime::DispatchResult {
+    fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> sp_runtime::DispatchResult {
         let balance_due = Claims::<T>::get(&signer).ok_or(Error::<T>::SignerHasNoClaim)?;
 
         let new_total = Total::<T>::get()
@@ -371,7 +370,11 @@ impl<T: Config> Pallet<T> {
         Total::<T>::put(new_total);
         Claims::<T>::remove(&signer);
 
-        Self::deposit_event(Event::Claimed { who: dest, ethereum_address: signer, amount: balance_due });
+        Self::deposit_event(Event::Claimed {
+            who: dest,
+            ethereum_address: signer,
+            amount: balance_due,
+        });
         Ok(())
     }
 }
@@ -380,24 +383,16 @@ impl<T: Config> Pallet<T> {
 mod tests {
     use super::*;
     use codec::Encode;
-    use hex_literal::hex;
     use frame_support::{
-        assert_noop, assert_ok,
+        assert_noop, assert_ok, parameter_types,
         traits::{Currency, ExistenceRequirement},
-        parameter_types,
-    };
-    use sp_runtime::{
-        traits::{BlakeTwo256, BadOrigin},
-        BuildStorage,
-        TokenError,
     };
     use frame_system::mocking::MockBlock;
-    use polkadot_sdk::{
-        sp_io,
-        sp_core,
-        frame_support,
-        frame_system,
-        pallet_balances,
+    use hex_literal::hex;
+    use polkadot_sdk::{frame_support, frame_system, pallet_balances, sp_core, sp_io};
+    use sp_runtime::{
+        traits::{BadOrigin, BlakeTwo256},
+        BuildStorage, TokenError,
     };
 
     type Block = MockBlock<Test>;
@@ -479,8 +474,8 @@ mod tests {
     impl Config for Test {
         type RuntimeEvent = RuntimeEvent;
         type Currency = Balances;
-      //  type WeightInfo = TestWeightInfo;
-      type PotId = PotId;
+        //  type WeightInfo = TestWeightInfo;
+        type PotId = PotId;
         type Prefix = Prefix;
         type MoveClaimOrigin = frame_system::EnsureRoot<u64>;
         type UnsignedPriority = frame_support::traits::ConstTransactionPriority<2>;
@@ -488,9 +483,15 @@ mod tests {
 
     pub struct TestWeightInfo;
     impl WeightInfo for TestWeightInfo {
-        fn claim() -> Weight { Weight::from_parts(0, 0) }
-        fn register_claim() -> Weight { Weight::from_parts(0, 0) }
-        fn move_claim() -> Weight { Weight::from_parts(0, 0) }
+        fn claim() -> Weight {
+            Weight::from_parts(0, 0)
+        }
+        fn register_claim() -> Weight {
+            Weight::from_parts(0, 0)
+        }
+        fn move_claim() -> Weight {
+            Weight::from_parts(0, 0)
+        }
     }
 
     // Helper functions for generating test accounts and signatures
@@ -505,7 +506,8 @@ mod tests {
     fn eth(secret: &libsecp256k1::SecretKey) -> EthereumAddress {
         let mut res = EthereumAddress::default();
         let pk = libsecp256k1::PublicKey::from_secret_key(secret);
-        res.0.copy_from_slice(&keccak_256(&pk.serialize()[1..65])[12..]);
+        res.0
+            .copy_from_slice(&keccak_256(&pk.serialize()[1..65])[12..]);
         res
     }
 
@@ -543,7 +545,10 @@ mod tests {
     #[test]
     fn basic_setup_works() {
         new_test_ext().execute_with(|| {
-            assert_eq!(pallet_balances::Pallet::<Test>::free_balance(&Claims::account_id()), 1_000_000);
+            assert_eq!(
+                pallet_balances::Pallet::<Test>::free_balance(&Claims::account_id()),
+                1_000_000
+            );
             assert_eq!(Claims::claims(&eth(&alice())), None);
             assert_eq!(Claims::total(), 0);
         });
@@ -556,7 +561,11 @@ mod tests {
             let eth_address = eth(&alice());
 
             // Register a claim
-            assert_ok!(Claims::register_claim(RuntimeOrigin::root(), eth_address, claim_amount));
+            assert_ok!(Claims::register_claim(
+                RuntimeOrigin::root(),
+                eth_address,
+                claim_amount
+            ));
 
             // Check state after registration
             assert_eq!(Claims::claims(&eth_address), Some(claim_amount));
@@ -575,12 +584,19 @@ mod tests {
             println!("eth_address: {:?}", eth_address);
 
             // Register a claim
-            assert_ok!(Claims::register_claim(RuntimeOrigin::root(), eth_address, claim_amount));
+            assert_ok!(Claims::register_claim(
+                RuntimeOrigin::root(),
+                eth_address,
+                claim_amount
+            ));
 
             // Check initial state
             assert_eq!(Claims::claims(&eth_address), Some(claim_amount));
             assert_eq!(Claims::total(), claim_amount);
-            assert_eq!(pallet_balances::Pallet::<Test>::free_balance(&dest_account), 0);
+            assert_eq!(
+                pallet_balances::Pallet::<Test>::free_balance(&dest_account),
+                0
+            );
 
             let signature = sig::<Test>(&alice(), &dest_account.encode(), &[][..]);
 
@@ -595,7 +611,10 @@ mod tests {
             ));
 
             // Check final state
-            assert_eq!(pallet_balances::Pallet::<Test>::free_balance(&dest_account), claim_amount);
+            assert_eq!(
+                pallet_balances::Pallet::<Test>::free_balance(&dest_account),
+                claim_amount
+            );
             assert_eq!(Claims::claims(&eth_address), None);
             assert_eq!(Claims::total(), 0);
         });
@@ -634,7 +653,11 @@ mod tests {
             let eth_address = eth(&alice());
 
             // Register a claim
-            assert_ok!(Claims::register_claim(RuntimeOrigin::root(), eth_address, claim_amount));
+            assert_ok!(Claims::register_claim(
+                RuntimeOrigin::root(),
+                eth_address,
+                claim_amount
+            ));
 
             // Drain the pallet account
             let pallet_account = Claims::account_id();
@@ -642,7 +665,7 @@ mod tests {
                 &pallet_account,
                 &42,
                 1_000_000,
-                ExistenceRequirement::AllowDeath
+                ExistenceRequirement::AllowDeath,
             );
 
             // Try to claim
@@ -665,10 +688,19 @@ mod tests {
             let new_eth = eth(&bob());
 
             // Register a claim for Alice
-            assert_ok!(Claims::register_claim(RuntimeOrigin::root(), old_eth, claim_amount));
+            assert_ok!(Claims::register_claim(
+                RuntimeOrigin::root(),
+                old_eth,
+                claim_amount
+            ));
 
             // Move claim from Alice to Bob
-            assert_ok!(Claims::move_claim(RuntimeOrigin::root(), old_eth, new_eth, None));
+            assert_ok!(Claims::move_claim(
+                RuntimeOrigin::root(),
+                old_eth,
+                new_eth,
+                None
+            ));
 
             // Check that the claim has been moved
             assert_eq!(Claims::claims(&old_eth), None);
@@ -683,7 +715,10 @@ mod tests {
             ));
 
             // Check final state
-            assert_eq!(pallet_balances::Pallet::<Test>::free_balance(&dest_account), claim_amount);
+            assert_eq!(
+                pallet_balances::Pallet::<Test>::free_balance(&dest_account),
+                claim_amount
+            );
             assert_eq!(Claims::claims(&new_eth), None);
             assert_eq!(Claims::total(), 0);
         });

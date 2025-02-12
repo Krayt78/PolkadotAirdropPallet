@@ -142,7 +142,6 @@ mod runtime {
 
     /// An airdrop pallet.
     #[runtime::pallet_index(7)]
-    //#[runtime::unsigned_validator(Airdrop)]  
     pub type Airdrop = pallet_airdrop::Pallet<Runtime>;
 }
 
@@ -196,7 +195,7 @@ impl pallet_airdrop::Config for Runtime {
     type PotId = PotId;
 	type MoveClaimOrigin = EnsureRoot<AccountId>;
 	//type WeightInfo = polkadot_sdk::polkadot_runtime_common_claims::WeightInfo<Runtime>;
-    //type UnsignedPriority = UnsignedPriority;
+    type UnsignedPriority = UnsignedPriority;
 }
 
 type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;
