@@ -12,6 +12,7 @@ codec = { features = ["derive"], workspace = true }
 frame-benchmarking = { workspace = true }
 hex-literal = "0.4.1"
 libsecp256k1 = { version = "0.7", default-features = false }
+polkadot-primitives = { workspace = true, default-features = false }
 polkadot-sdk = { workspace = true, features = [
 	"experimental",
 	"pallet-balances",
@@ -31,6 +32,7 @@ std = [
 	"codec/std",
 	"frame-benchmarking/std",
 	"libsecp256k1/std",
+	"polkadot-primitives/std",
 	"polkadot-sdk/std",
 	"rustc-hex/std",
 	"scale-info/std",

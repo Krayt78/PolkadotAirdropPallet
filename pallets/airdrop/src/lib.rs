@@ -21,6 +21,8 @@ use polkadot_sdk::{
     },
 };
 
+use polkadot_primitives::ValidityError;
+
 //use frame::prelude::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::prelude::{format, string::String, vec::Vec};
@@ -110,6 +112,8 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
     use scale_info::prelude::vec;
 
+    use crate::Error::*;
+
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
@@ -174,6 +178,7 @@ pub mod pallet {
         /// There's not enough in the pot to pay out some unvested amount. Generally implies a logic error.
         InsufficientPalletBalance,
     }
+
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         /// Make a claim to collect your tokens.
@@ -280,18 +285,16 @@ pub mod pallet {
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
             match call {
-                Call::claim {
-                    dest,
-                    ethereum_signature,
-                } => {
-                    // Get the signing address
-                    let data = dest.encode();
-                    let signer = Self::eth_recover(ethereum_signature, &data, T::Prefix::get())
-                        .ok_or(InvalidTransaction::Custom(1))?;
+                Call::claim { dest, ethereum_signature } => {
+                    let data = dest.using_encoded(to_ascii_hex);
+                    let signer = Self::eth_recover(ethereum_signature, &data, &[][..])
+                        .ok_or(InvalidTransaction::Custom(
+                            ValidityError::InvalidEthereumSignature.into()
+                        ))?;
 
                     // Check if this signer has a claim
-                    let _balance =
-                        Claims::<T>::get(&signer).ok_or(InvalidTransaction::Custom(2))?;
+                    let _balance = Claims::<T>::get(&signer)
+                        .ok_or(InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into()))?;
 
                     Ok(ValidTransaction {
                         priority: T::UnsignedPriority::get(),
@@ -391,6 +394,7 @@ mod tests {
     use hex_literal::hex;
     use polkadot_sdk::{frame_support, frame_system, pallet_balances, sp_core, sp_io};
     use sp_runtime::{
+        self,
         traits::{BadOrigin, BlakeTwo256},
         BuildStorage, TokenError,
     };
