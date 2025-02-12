@@ -149,7 +149,7 @@ parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
     pub Prefix: &'static [u8] = b"Some prefix:";
     pub const PotId: PalletId = PalletId(*b"airdrop!");
-    //pub const UnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
+    pub const UnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;
 }
 
 /// Implements the types required for the system pallet.

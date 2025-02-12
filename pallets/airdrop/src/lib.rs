@@ -3,6 +3,7 @@
 use polkadot_sdk::{
     frame_support::{
         self,
+   
         pallet_prelude::Weight,
         traits::{Currency, ExistenceRequirement, Get},
         PalletId,
@@ -107,6 +108,7 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
+    use scale_info::prelude::vec;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
@@ -210,8 +212,6 @@ pub mod pallet {
             let data = dest.using_encoded(to_ascii_hex);
             let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
                 .ok_or(Error::<T>::InvalidEthereumSignature)?;
-
-            //println!("{:?}", signer);
 
             Self::process_claim(signer, dest)?;
             Ok(())
