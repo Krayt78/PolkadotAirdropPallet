@@ -14,7 +14,7 @@ use polkadot_sdk::{
         self,
         traits::{AccountIdConversion, CheckedSub, ValidateUnsigned},
         transaction_validity::{
-            InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
+            InvalidTransaction, TransactionLongevity, TransactionSource,
             ValidTransaction,
         },
         RuntimeDebug, Saturating,
@@ -57,7 +57,13 @@ impl WeightInfo for TestWeightInfo {
 #[derive(
     Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen,
 )]
-pub struct EthereumAddress([u8; 20]);
+pub struct EthereumAddress(pub [u8; 20]);
+
+impl AsRef<[u8]> for EthereumAddress {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
 
 impl Serialize for EthereumAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -111,8 +117,6 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
     use scale_info::prelude::vec;
-
-    use crate::Error::*;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
@@ -744,10 +748,15 @@ mod tests {
                 assert_eq!(Balances::free_balance(42), 0);
                 let claim_amount = 100;
                 let dest_account = 42u64;
-                let ethTestAccount = libsecp256k1::SecretKey::parse(&keccak_256(b"9116d6c6a9c830c06af62af6d4101b566e2466d88510b6c11d655545c74790a4")).unwrap();
-                let eth_address = eth(&ethTestAccount);
+                
+                // Parse the private key directly without hashing
+                let private_key = hex::decode("9116d6c6a9c830c06af62af6d4101b566e2466d88510b6c11d655545c74790a4").unwrap();
+                let mut private_key_bytes = [0u8; 32];
+                private_key_bytes.copy_from_slice(&private_key);
+                let eth_test_account = libsecp256k1::SecretKey::parse(&private_key_bytes).unwrap();
+                let eth_address = eth(&eth_test_account);
 
-                println!("test eth_address: {:?}", eth_address.to_string());
+                println!("Ethereum address: 0x{}", hex::encode(eth_address.as_ref()));
 
                 // Register a claim
                 assert_ok!(Claims::register_claim(
@@ -764,9 +773,7 @@ mod tests {
                     0
                 );
 
-                //let signature = "444023e89b67e67c0562ed0305d252a5dd12b2af5ac51d6d3cb69a0b486bc4b3191401802dc29d26d586221f7256cd3329fe82174bdf659baea149a40e1c495d1c";
-
-                let signature = sig::<Test>(&ethTestAccount, &dest_account.encode(), &[][..]);
+                let signature = sig::<Test>(&eth_test_account, &dest_account.encode(), &[][..]);
 
                 // Log the signature with println!
                 println!("signature : {:?}", signature.0);

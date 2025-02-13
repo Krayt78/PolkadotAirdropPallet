@@ -7391,6 +7391,7 @@ name = "pallet-airdrop"
 version = "0.1.0"
 dependencies = [
  "frame-benchmarking 38.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex",
  "hex-literal",
  "libsecp256k1",
  "parity-scale-codec",
