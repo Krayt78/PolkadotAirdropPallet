@@ -135,9 +135,6 @@ pub mod pallet {
         /// Treasury account Id
         #[pallet::constant]
         type PotId: Get<PalletId>;
-
-        /// The priority of unsigned transactions.
-        type UnsignedPriority: Get<TransactionPriority>;
     }
 
     #[pallet::storage]
@@ -284,6 +281,8 @@ pub mod pallet {
         type Call = Call<T>;
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+            const PRIORITY: u64 = 100;
+
             match call {
                 Call::claim { dest, ethereum_signature } => {
                     let data = dest.using_encoded(to_ascii_hex);
@@ -297,7 +296,7 @@ pub mod pallet {
                         .ok_or(InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into()))?;
 
                     Ok(ValidTransaction {
-                        priority: T::UnsignedPriority::get(),
+                        priority: PRIORITY,
                         requires: vec![],
                         provides: vec![(signer, dest.clone()).encode()],
                         longevity: TransactionLongevity::max_value(),
@@ -482,7 +481,6 @@ mod tests {
         type PotId = PotId;
         type Prefix = Prefix;
         type MoveClaimOrigin = frame_system::EnsureRoot<u64>;
-        type UnsignedPriority = frame_support::traits::ConstTransactionPriority<2>;
     }
 
     pub struct TestWeightInfo;
@@ -737,6 +735,56 @@ mod tests {
                 let who = 42u64.using_encoded(to_ascii_hex);
                 let signer = Pallet::<Test>::eth_recover(&sig, &who, &[][..]).unwrap();
                 assert_eq!(signer.0, hex!["6d31165d5d932d571f3b44695653b46dcc327e84"]);
+            });
+    }
+
+    #[test]
+    fn custom_signature_test() {
+        new_test_ext().execute_with(|| {
+                assert_eq!(Balances::free_balance(42), 0);
+                let claim_amount = 100;
+                let dest_account = 42u64;
+                let ethTestAccount = libsecp256k1::SecretKey::parse(&keccak_256(b"9116d6c6a9c830c06af62af6d4101b566e2466d88510b6c11d655545c74790a4")).unwrap();
+                let eth_address = eth(&ethTestAccount);
+
+                println!("test eth_address: {:?}", eth_address.to_string());
+
+                // Register a claim
+                assert_ok!(Claims::register_claim(
+                    RuntimeOrigin::root(),
+                    eth_address,
+                    claim_amount
+                ));
+
+                // Check initial state
+                assert_eq!(Claims::claims(&eth_address), Some(claim_amount));
+                assert_eq!(Claims::total(), claim_amount);
+                assert_eq!(
+                    pallet_balances::Pallet::<Test>::free_balance(&dest_account),
+                    0
+                );
+
+                //let signature = "444023e89b67e67c0562ed0305d252a5dd12b2af5ac51d6d3cb69a0b486bc4b3191401802dc29d26d586221f7256cd3329fe82174bdf659baea149a40e1c495d1c";
+
+                let signature = sig::<Test>(&ethTestAccount, &dest_account.encode(), &[][..]);
+
+                // Log the signature with println!
+                println!("signature : {:?}", signature.0);
+
+                // Claim tokens
+                assert_ok!(Claims::claim(
+                    RuntimeOrigin::none(),
+                    dest_account,
+                    signature
+                ));
+
+                // Check final state
+                assert_eq!(
+                    pallet_balances::Pallet::<Test>::free_balance(&dest_account),
+                    claim_amount
+                );
+                assert_eq!(Claims::claims(&eth_address), None);
+                assert_eq!(Claims::total(), 0);
             });
     }
 }

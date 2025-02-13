@@ -195,7 +195,6 @@ impl pallet_airdrop::Config for Runtime {
     type PotId = PotId;
 	type MoveClaimOrigin = EnsureRoot<AccountId>;
 	//type WeightInfo = polkadot_sdk::polkadot_runtime_common_claims::WeightInfo<Runtime>;
-    type UnsignedPriority = UnsignedPriority;
 }
 
 type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;
