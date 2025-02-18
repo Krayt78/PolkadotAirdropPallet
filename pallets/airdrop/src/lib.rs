@@ -775,8 +775,12 @@ mod tests {
 
                 let signature = sig::<Test>(&eth_test_account, &dest_account.encode(), &[][..]);
 
+                // Log dest_account
+                println!("dest_account : {:?}", dest_account);  
                 // Log the signature with println!
                 println!("signature : {:?}", signature.0);
+                // Log the signature with println! in hex
+                println!("signature : {:?}", hex::encode(signature.0));
 
                 // Claim tokens
                 assert_ok!(Claims::claim(
