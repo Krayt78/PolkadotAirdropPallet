@@ -147,6 +147,7 @@ mod runtime {
 
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
+    /// The airdrop pallet prefix. Should match the one used in frontend.
     pub Prefix: &'static [u8] = b"Some prefix:";
     pub const PotId: PalletId = PalletId(*b"airdrop!");
     pub const UnsignedPriority: TransactionPriority = TransactionPriority::max_value() / 2;

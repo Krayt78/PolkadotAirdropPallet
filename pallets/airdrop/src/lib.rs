@@ -149,11 +149,6 @@ pub mod pallet {
     #[pallet::getter(fn total)]
     pub type Total<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
-    #[pallet::storage]
-    #[pallet::getter(fn preclaims)]
-    pub(super) type Preclaims<T: Config> =
-        StorageMap<_, Blake2_128Concat, T::AccountId, EthereumAddress>;
-
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
@@ -264,16 +259,12 @@ pub mod pallet {
             origin: OriginFor<T>,
             old: EthereumAddress,
             new: EthereumAddress,
-            maybe_preclaim: Option<T::AccountId>,
         ) -> DispatchResultWithPostInfo {
             T::MoveClaimOrigin::try_origin(origin)
                 .map(|_| ())
                 .or_else(ensure_root)?;
 
             Claims::<T>::take(&old).map(|c| Claims::<T>::insert(&new, c));
-            if let Some(p) = maybe_preclaim {
-                Preclaims::<T>::insert(p, new);
-            }
 
             Self::deposit_event(Event::ClaimMoved { old, new });
             Ok(Pays::No.into())
@@ -704,8 +695,7 @@ mod tests {
             assert_ok!(Claims::move_claim(
                 RuntimeOrigin::root(),
                 old_eth,
-                new_eth,
-                None
+                new_eth
             ));
 
             // Check that the claim has been moved
