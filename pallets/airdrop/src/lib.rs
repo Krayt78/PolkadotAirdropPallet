@@ -139,6 +139,9 @@ pub mod pallet {
         /// Treasury account Id
         #[pallet::constant]
         type PotId: Get<PalletId>;
+
+        /// The weight info for the pallet.
+        type WeightInfo: WeightInfo;
     }
 
     #[pallet::storage]
@@ -202,7 +205,7 @@ pub mod pallet {
         /// Total Complexity: O(1)
         /// </weight>
         #[pallet::call_index(0)]
-        #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
+        #[pallet::weight(T::WeightInfo::claim())]
         pub fn claim(
             origin: OriginFor<T>,
             dest: T::AccountId,
@@ -252,7 +255,6 @@ pub mod pallet {
         /// Parameters:
         /// - `old`: The old Ethereum address.
         /// - `new`: The new Ethereum address.
-        /// - `maybe_preclaim`: The account that should be allowed to claim the tokens.
         #[pallet::call_index(2)]
         #[pallet::weight(10_000 + T::DbWeight::get().reads_writes(1,1).ref_time())]
         pub fn move_claim(
@@ -472,7 +474,7 @@ mod tests {
     impl Config for Test {
         type RuntimeEvent = RuntimeEvent;
         type Currency = Balances;
-        //  type WeightInfo = TestWeightInfo;
+        type WeightInfo = TestWeightInfo;
         type PotId = PotId;
         type Prefix = Prefix;
         type MoveClaimOrigin = frame_system::EnsureRoot<u64>;
