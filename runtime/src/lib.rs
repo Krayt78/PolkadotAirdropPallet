@@ -128,7 +128,6 @@ mod runtime {
 
     /// An airdrop pallet.
     #[runtime::pallet_index(7)]
-    //#[runtime::validate_unsigned] 
     pub type Airdrop = pallet_airdrop::Pallet<Runtime>;
 }
 

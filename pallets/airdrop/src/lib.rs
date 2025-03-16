@@ -735,6 +735,19 @@ mod tests {
     }
 
     #[test]
+    fn real_eth_sig_hex_works() {
+        new_test_ext().execute_with(|| {
+                //Signature is "0xa14a1de114061d347702e0002c0a863d774c3ca1df83008a47c47b391c368b097191ff2107352954f4d43d01fed02384abf315ee861d91dd41c869cd4501546b00"
+                //The address is "0x79933Da2de793DFC61c90017884C253B9BDF8B90"
+                let sig = hex!["a14a1de114061d347702e0002c0a863d774c3ca1df83008a47c47b391c368b097191ff2107352954f4d43d01fed02384abf315ee861d91dd41c869cd4501546b00"];
+                let sig = EcdsaSignature(sig);
+                let who = 42u64.using_encoded(to_ascii_hex);
+                let signer = Pallet::<Test>::eth_recover(&sig, &who, &[][..]).unwrap();
+                assert_eq!(signer.0, hex!["79933Da2de793DFC61c90017884C253B9BDF8B90"]);
+            });
+    }
+
+    #[test]
     fn custom_signature_test() {
         new_test_ext().execute_with(|| {
                 assert_eq!(Balances::free_balance(42), 0);
@@ -770,9 +783,9 @@ mod tests {
                 // Log dest_account
                 println!("dest_account : {:?}", dest_account);  
                 // Log the signature with println!
-                println!("signature : {:?}", signature.0);
+                println!("signature bytes: {:?}", signature.0);
                 // Log the signature with println! in hex
-                println!("signature : {:?}", hex::encode(signature.0));
+                println!("signature hex : {:?}", hex::encode(signature.0));
 
                 // Claim tokens
                 assert_ok!(Claims::claim(
