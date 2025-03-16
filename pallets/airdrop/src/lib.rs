@@ -803,4 +803,57 @@ mod tests {
                 assert_eq!(Claims::total(), 0);
             });
     }
+
+    #[test]
+    fn full_test() {
+        new_test_ext().execute_with(|| {
+                assert_eq!(Balances::free_balance(42), 0);
+                let claim_amount = 100;
+                let dest_account = 42u64;
+
+                let eth_hex_address = hex!["79933Da2de793DFC61c90017884C253B9BDF8B90"];
+                let eth_address = EthereumAddress(eth_hex_address);
+                println!("Ethereum address: 0x{}", hex::encode(eth_address.as_ref()));
+
+                // Register a claim
+                assert_ok!(Claims::register_claim(
+                    RuntimeOrigin::root(),
+                    eth_address,
+                    claim_amount
+                ));
+
+                // Check initial state
+                assert_eq!(Claims::claims(&eth_address), Some(claim_amount));
+                assert_eq!(Claims::total(), claim_amount);
+                assert_eq!(
+                    pallet_balances::Pallet::<Test>::free_balance(&dest_account),
+                    0
+                );
+
+                let signature_hex = hex!["a14a1de114061d347702e0002c0a863d774c3ca1df83008a47c47b391c368b097191ff2107352954f4d43d01fed02384abf315ee861d91dd41c869cd4501546b00"];
+                let signature = EcdsaSignature(signature_hex);  
+
+                // Log dest_account
+                println!("dest_account : {:?}", dest_account);  
+                // Log the signature with println!
+                println!("signature bytes: {:?}", signature.0);
+                // Log the signature with println! in hex
+                println!("signature hex : {:?}", signature_hex);
+
+                // Claim tokens
+                assert_ok!(Claims::claim(
+                    RuntimeOrigin::none(),
+                    dest_account,
+                    signature
+                ));
+
+                // Check final state
+                assert_eq!(
+                    pallet_balances::Pallet::<Test>::free_balance(&dest_account),
+                    claim_amount
+                );
+                assert_eq!(Claims::claims(&eth_address), None);
+                assert_eq!(Claims::total(), 0);
+            });
+    }
 }
