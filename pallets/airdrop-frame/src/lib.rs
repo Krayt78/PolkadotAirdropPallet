@@ -21,7 +21,7 @@ pub trait WeightInfo {
 }
 
 #[derive(
-    Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen,
+    Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen, DecodeWithMemTracking,
 )]
 pub struct EthereumAddress(pub [u8; 20]);
 
@@ -62,7 +62,7 @@ impl<'de> Deserialize<'de> for EthereumAddress {
     }
 }
 
-#[derive(Encode, Decode, Clone, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, TypeInfo, MaxEncodedLen, DecodeWithMemTracking)]
 pub struct EcdsaSignature(pub [u8; 65]);
 
 impl PartialEq for EcdsaSignature {
@@ -333,16 +333,16 @@ mod tests {
     }
 
     impl frame_system::Config for Test {
-        type BaseCallFilter = frame_support::traits::Everything;
+        type BaseCallFilter = Everything;
         type BlockWeights = ();
         type BlockLength = ();
         type RuntimeOrigin = RuntimeOrigin;
         type RuntimeCall = RuntimeCall;
         type Nonce = u64;
-        type Hash = sp_core::H256;
+        type Hash = H256;
         type Hashing = BlakeTwo256;
         type AccountId = u64;
-        type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
+        type Lookup = IdentityLookup<Self::AccountId>;
         type Block = Block;
         type RuntimeEvent = RuntimeEvent;
         type BlockHashCount = BlockHashCount;
@@ -355,13 +355,14 @@ mod tests {
         type SystemWeightInfo = ();
         type SS58Prefix = SS58Prefix;
         type OnSetCode = ();
-        type MaxConsumers = frame_support::traits::ConstU32<16>;
+        type MaxConsumers = ConstU32<16>;
         type PreInherents = ();
         type SingleBlockMigrations = ();
         type PostInherents = ();
         type PostTransactions = ();
         type RuntimeTask = ();
         type MultiBlockMigrator = ();
+        type ExtensionsWeightInfo = ();
     }
 
     parameter_types! {
@@ -385,6 +386,7 @@ mod tests {
         type RuntimeFreezeReason = RuntimeFreezeReason;
         type FreezeIdentifier = ();
         type MaxFreezes = MaxFreezes;
+        type DoneSlashHandler = ();
     }
 
     parameter_types! {
@@ -447,7 +449,7 @@ mod tests {
         EcdsaSignature(r)
     }
 
-    pub fn new_test_ext() -> sp_io::TestExternalities {
+    pub fn new_test_ext() -> TestExternalities {
         let mut t = frame_system::GenesisConfig::<Test>::default()
             .build_storage()
             .unwrap();
@@ -455,6 +457,7 @@ mod tests {
         let initial_balance = 1_000_000;
         pallet_balances::GenesisConfig::<Test> {
             balances: vec![(Claims::account_id(), initial_balance)],
+            dev_accounts: None,
         }
         .assimilate_storage(&mut t)
         .unwrap();

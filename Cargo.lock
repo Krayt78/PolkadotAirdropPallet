@@ -108,6 +108,9 @@ dependencies = [
 name = "airdrop-frame"
 version = "0.1.0"
 dependencies = [
+ "hex",
+ "hex-literal",
+ "libsecp256k1",
  "pallet-balances 41.1.0",
  "parity-scale-codec",
  "polkadot-sdk-frame 0.9.1",
