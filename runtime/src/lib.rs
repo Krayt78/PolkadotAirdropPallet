@@ -26,19 +26,19 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 extern crate alloc;
 
 use alloc::{vec, vec::Vec};
+use frame_support::PalletId;
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use polkadot_sdk::{
     polkadot_sdk_frame::{
         self as frame,
         prelude::*,
-        runtime::{apis, types_common::AccountId,prelude::*},
+        runtime::{apis, prelude::*, types_common::AccountId},
     },
     *,
 };
-use frame_support::PalletId;
 use sp_runtime::{
-	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+    transaction_validity::{TransactionSource, TransactionValidity},
+    ApplyExtrinsicResult,
 };
 
 /// The runtime version.
@@ -178,10 +178,10 @@ impl pallet_minimal_template::Config for Runtime {}
 impl pallet_airdrop::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
-	type Prefix = Prefix;
+    type Prefix = Prefix;
     type PotId = PotId;
-	type MoveClaimOrigin = EnsureRoot<AccountId>;
-	type WeightInfo = pallet_airdrop::TestWeightInfo;
+    type MoveClaimOrigin = EnsureRoot<AccountId>;
+    type WeightInfo = pallet_airdrop::TestWeightInfo;
 }
 
 type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;

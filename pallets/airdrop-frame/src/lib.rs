@@ -1,30 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use polkadot_sdk::{
-    frame_support::{
-        self,
-        pallet_prelude::Weight,
-        traits::{Currency, ExistenceRequirement, Get},
-        PalletId,
-    },
-    frame_system,
-    sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256},
-    sp_runtime::{
-        self,
-        traits::{AccountIdConversion, CheckedSub, ValidateUnsigned},
-        transaction_validity::{
-            InvalidTransaction, TransactionLongevity, TransactionSource, ValidTransaction,
-        },
-        RuntimeDebug, Saturating,
-    },
-};
-
-use polkadot_primitives::ValidityError;
-
-//use frame::prelude::*;
-use codec::{Decode, Encode, MaxEncodedLen};
-use scale_info::prelude::{format, string::String, vec::Vec};
-use scale_info::TypeInfo;
+use frame::deps::frame_support::PalletId;
+use frame::deps::sp_io::crypto::secp256k1_ecdsa_recover;
+use frame::prelude::*;
+use frame::traits::AccountIdConversion;
+use frame::traits::Currency;
+use frame::traits::ExistenceRequirement;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 
 // Re-export all pallet parts, this is needed to properly import the pallet into the runtime.
@@ -37,19 +18,6 @@ pub trait WeightInfo {
     fn claim() -> Weight;
     fn register_claim() -> Weight;
     fn move_claim() -> Weight;
-}
-
-pub struct TestWeightInfo;
-impl WeightInfo for TestWeightInfo {
-    fn claim() -> Weight {
-        Weight::zero()
-    }
-    fn register_claim() -> Weight {
-        Weight::zero()
-    }
-    fn move_claim() -> Weight {
-        Weight::zero()
-    }
 }
 
 #[derive(
@@ -109,21 +77,29 @@ impl core::fmt::Debug for EcdsaSignature {
     }
 }
 
-#[frame_support::pallet]
+/// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
+fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
+    let mut r = Vec::with_capacity(data.len() * 2);
+    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
+    for &b in data.iter() {
+        push_nibble(b / 16);
+        push_nibble(b % 16);
+    }
+    r
+}
+
+#[frame::pallet]
 pub mod pallet {
     use super::*;
-    use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
-    use scale_info::prelude::vec;
+    use frame::traits::Currency;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: polkadot_sdk::frame_system::Config {
+    pub trait Config: frame_system::Config {
         /// The overarching event type.
-        type RuntimeEvent: From<Event<Self>>
-            + IsType<<Self as polkadot_sdk::frame_system::Config>::RuntimeEvent>;
+        type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// The currency mechanism.
         type Currency: Currency<Self::AccountId>;
@@ -270,52 +246,6 @@ pub mod pallet {
             Ok(Pays::No.into())
         }
     }
-
-    #[pallet::validate_unsigned]
-    impl<T: Config> ValidateUnsigned for Pallet<T> {
-        type Call = Call<T>;
-
-        fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-            const PRIORITY: u64 = 100;
-
-            match call {
-                Call::claim {
-                    dest,
-                    ethereum_signature,
-                } => {
-                    let data = dest.using_encoded(to_ascii_hex);
-                    let signer = Self::eth_recover(ethereum_signature, &data, &[][..]).ok_or(
-                        InvalidTransaction::Custom(ValidityError::InvalidEthereumSignature.into()),
-                    )?;
-
-                    // Check if this signer has a claim
-                    let _balance = Claims::<T>::get(&signer).ok_or(InvalidTransaction::Custom(
-                        ValidityError::SignerHasNoClaim.into(),
-                    ))?;
-
-                    Ok(ValidTransaction {
-                        priority: PRIORITY,
-                        requires: vec![],
-                        provides: vec![(signer, dest.clone()).encode()],
-                        longevity: TransactionLongevity::max_value(),
-                        propagate: true,
-                    })
-                }
-                _ => Err(InvalidTransaction::Call.into()),
-            }
-        }
-    }
-}
-
-/// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
-fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
-    let mut r = Vec::with_capacity(data.len() * 2);
-    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
-    for &b in data.iter() {
-        push_nibble(b / 16);
-        push_nibble(b % 16);
-    }
-    r
 }
 
 impl<T: Config> Pallet<T> {
@@ -351,7 +281,7 @@ impl<T: Config> Pallet<T> {
         Some(res)
     }
 
-    fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> sp_runtime::DispatchResult {
+    fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> DispatchResult {
         let balance_due = Claims::<T>::get(&signer).ok_or(Error::<T>::SignerHasNoClaim)?;
 
         let new_total = Total::<T>::get()
@@ -382,23 +312,13 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codec::Encode;
-    use frame_support::{
-        assert_noop, assert_ok, parameter_types,
-        traits::{Currency, ExistenceRequirement},
-    };
-    use frame_system::mocking::MockBlock;
+    use frame::testing_prelude::*;
     use hex_literal::hex;
-    use polkadot_sdk::{frame_support, frame_system, sp_core, sp_io};
-    use sp_runtime::{
-        self,
-        traits::{BadOrigin, BlakeTwo256},
-        BuildStorage, TokenError,
-    };
+    use pallet_balances;
 
     type Block = MockBlock<Test>;
 
-    frame_support::construct_runtime!(
+    construct_runtime!(
         pub enum Test
         {
             System: frame_system,

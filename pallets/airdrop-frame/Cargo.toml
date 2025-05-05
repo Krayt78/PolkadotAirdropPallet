@@ -1,0 +1,32 @@
+[package]
+name = "airdrop-frame"
+version = "0.1.0"
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+
+[dependencies]
+codec = { features = ["derive"], workspace = true }
+scale-info = { features = ["derive"], workspace = true }
+frame = { version = "0.9.1", package = "polkadot-sdk-frame" }
+hex = { version = "0.4.3", default-features = false }
+hex-literal = "0.4.1"
+rustc-hex = { workspace = true }
+serde = { features = ["alloc"], workspace = true }
+pallet-balances = "41.1.0"
+libsecp256k1 = { version = "0.7", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+  "codec/std",
+  "frame/std",
+  "scale-info/std",
+  "rustc-hex/std",
+  "serde/std",
+  "pallet-balances/std",
+  "hex/std",
+  "libsecp256k1/std",
+]

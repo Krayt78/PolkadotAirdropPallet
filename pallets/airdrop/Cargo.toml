@@ -13,10 +13,10 @@ frame-benchmarking = { workspace = true }
 hex = { version = "0.4.3", default-features = false }
 hex-literal = "0.4.1"
 libsecp256k1 = { version = "0.7", default-features = false }
+pallet-balances = "41.1.0"
 polkadot-primitives = { workspace = true, default-features = false }
 polkadot-sdk = { workspace = true, features = [
 	"experimental",
-	"pallet-balances",
 	"runtime",
 ], default-features = false }
 rustc-hex = { workspace = true }
@@ -39,11 +39,14 @@ std = [
 	"scale-info/std",
 	"serde/std",
 	"hex/std",
+	"pallet-balances/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"polkadot-sdk/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
 ]
 try-runtime = [
   "polkadot-sdk/try-runtime",
+  "pallet-balances/try-runtime",
 ]
