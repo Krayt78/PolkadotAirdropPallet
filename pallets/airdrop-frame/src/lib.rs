@@ -88,6 +88,9 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
     r
 }
 
+const INVALID_ETHEREUM_SIGNATURE_CODE: u8 = 1;
+const SIGNER_HAS_NO_CLAIM_CODE: u8 = 2;
+
 #[frame::pallet]
 pub mod pallet {
     use super::*;
@@ -244,6 +247,41 @@ pub mod pallet {
 
             Self::deposit_event(Event::ClaimMoved { old, new });
             Ok(Pays::No.into())
+        }
+    }
+
+    #[pallet::validate_unsigned]
+    impl<T: Config> ValidateUnsigned for Pallet<T> {
+        type Call = Call<T>;
+
+        fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+            const PRIORITY: u64 = 100;
+
+            match call {
+                Call::claim {
+                    dest,
+                    ethereum_signature,
+                } => {
+                    let data = dest.using_encoded(to_ascii_hex);
+                    let signer = Self::eth_recover(ethereum_signature, &data, &[][..]).ok_or(
+                        TransactionValidityError::Invalid(InvalidTransaction::Custom(INVALID_ETHEREUM_SIGNATURE_CODE))
+                    )?;
+
+                    // Check if this signer has a claim
+                    let _balance = Claims::<T>::get(&signer).ok_or(
+                        TransactionValidityError::Invalid(InvalidTransaction::Custom(SIGNER_HAS_NO_CLAIM_CODE))
+                    )?;
+
+                    Ok(ValidTransaction {
+                        priority: PRIORITY,
+                        requires: vec![],
+                        provides: vec![(signer, dest.clone()).encode()],
+                        longevity: TransactionLongevity::max_value(),
+                        propagate: true,
+                    })
+                }
+                _ => Err(InvalidTransaction::Call.into()),
+            }
         }
     }
 }
