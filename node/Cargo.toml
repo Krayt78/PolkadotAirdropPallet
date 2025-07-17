@@ -14,14 +14,13 @@ build = "build.rs"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-docify = { workspace = true }
 clap = { features = ["derive"], workspace = true }
+docify = { workspace = true }
 futures = { features = ["thread-pool"], workspace = true }
 futures-timer = { workspace = true }
 jsonrpsee = { features = ["server"], workspace = true }
-serde_json = { workspace = true, default-features = true }
+airdrop-runtime.workspace = true
 polkadot-sdk = { workspace = true, features = ["experimental", "node"] }
-minimal-template-runtime.workspace = true
 
 [build-dependencies]
 polkadot-sdk = { workspace = true, features = ["substrate-build-script-utils"] }
@@ -29,6 +28,6 @@ polkadot-sdk = { workspace = true, features = ["substrate-build-script-utils"] }
 [features]
 default = ["std"]
 std = [
-	"minimal-template-runtime/std",
+	"airdrop-runtime/std",
 	"polkadot-sdk/std",
 ]

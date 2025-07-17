@@ -3,9 +3,8 @@
 use polkadot_sdk::{
     frame_support::{
         self,
-   
         pallet_prelude::Weight,
-        traits::{Currency, ExistenceRequirement, Get},
+        traits::{Currency, ExistenceRequirement, Get, IsType},
         PalletId,
     },
     frame_system,
@@ -24,7 +23,7 @@ use polkadot_sdk::{
 use polkadot_primitives::ValidityError;
 
 //use frame::prelude::*;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, DecodeWithMemTracking, MaxEncodedLen};
 use scale_info::prelude::{format, string::String, vec::Vec};
 use scale_info::TypeInfo;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
@@ -55,7 +54,7 @@ impl WeightInfo for TestWeightInfo {
 }
 
 #[derive(
-    Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo, MaxEncodedLen,
+    Clone, Copy, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, Default, RuntimeDebug, TypeInfo, MaxEncodedLen,
 )]
 pub struct EthereumAddress(pub [u8; 20]);
 
@@ -81,7 +80,7 @@ impl<'de> Deserialize<'de> for EthereumAddress {
         D: Deserializer<'de>,
     {
         let base_string = String::deserialize(deserializer)?;
-        let offset = if base_string.starts_with("0x") { 2 } else { 0 };
+        let offset = if base_string.starts_with("0x") { 2 } else { 1 };
         let s = &base_string[offset..];
         if s.len() != 40 {
             Err(serde::de::Error::custom(
@@ -96,7 +95,7 @@ impl<'de> Deserialize<'de> for EthereumAddress {
     }
 }
 
-#[derive(Encode, Decode, Clone, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Clone, TypeInfo, MaxEncodedLen)]
 pub struct EcdsaSignature(pub [u8; 65]);
 
 impl PartialEq for EcdsaSignature {
@@ -124,7 +123,7 @@ pub mod pallet {
     #[pallet::config]
     pub trait Config: polkadot_sdk::frame_system::Config {
         /// The overarching event type.
-        type RuntimeEvent: From<Event<Self>>
+        type RuntimeEvent: From<Event<Self>> 
             + IsType<<Self as polkadot_sdk::frame_system::Config>::RuntimeEvent>;
 
         /// The currency mechanism.
@@ -423,7 +422,6 @@ mod tests {
         type AccountId = u64;
         type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
         type Block = Block;
-        type RuntimeEvent = RuntimeEvent;
         type BlockHashCount = BlockHashCount;
         type DbWeight = ();
         type Version = ();
@@ -453,7 +451,6 @@ mod tests {
     impl pallet_balances::Config for Test {
         type Balance = u64;
         type DustRemoval = ();
-        type RuntimeEvent = RuntimeEvent;
         type ExistentialDeposit = ExistentialDeposit;
         type AccountStore = System;
         type WeightInfo = ();
@@ -472,7 +469,6 @@ mod tests {
     }
 
     impl Config for Test {
-        type RuntimeEvent = RuntimeEvent;
         type Currency = Balances;
         type WeightInfo = TestWeightInfo;
         type PotId = PotId;
