@@ -216,6 +216,13 @@ pub mod pallet {
             let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
                 .ok_or(Error::<T>::InvalidEthereumSignature)?;
 
+            // Log the Ethereum address for debugging
+            log::info!(
+                target: "airdrop",
+                "🔑🔑🔑🔑🔑 Claim attempt from Ethereum address: 0x{:?}",
+                hex::encode(&signer.0)
+            );
+
             Self::process_claim(signer, dest)?;
             Ok(())
         }
@@ -368,6 +375,13 @@ impl<T: Config> Pallet<T> {
         Total::<T>::put(new_total);
         Claims::<T>::remove(&signer);
 
+        // Log successful claim
+        log::info!(
+            target: "airdrop",
+            "✅ Successfully processed claim for Ethereum address: {:?}, amount: {:?}",
+            signer, balance_due
+        );
+
         Self::deposit_event(Event::Claimed {
             who: dest,
             ethereum_address: signer,
@@ -416,6 +430,7 @@ mod tests {
         type BlockLength = ();
         type RuntimeOrigin = RuntimeOrigin;
         type RuntimeCall = RuntimeCall;
+        type RuntimeEvent = RuntimeEvent;
         type Nonce = u64;
         type Hash = sp_core::H256;
         type Hashing = BlakeTwo256;
@@ -439,6 +454,7 @@ mod tests {
         type PostTransactions = ();
         type RuntimeTask = ();
         type MultiBlockMigrator = ();
+        type ExtensionsWeightInfo = ();
     }
 
     parameter_types! {
@@ -451,6 +467,7 @@ mod tests {
     impl pallet_balances::Config for Test {
         type Balance = u64;
         type DustRemoval = ();
+        type RuntimeEvent = RuntimeEvent;
         type ExistentialDeposit = ExistentialDeposit;
         type AccountStore = System;
         type WeightInfo = ();
@@ -461,6 +478,7 @@ mod tests {
         type RuntimeFreezeReason = RuntimeFreezeReason;
         type FreezeIdentifier = ();
         type MaxFreezes = MaxFreezes;
+        type DoneSlashHandler = ();
     }
 
     parameter_types! {
@@ -469,6 +487,7 @@ mod tests {
     }
 
     impl Config for Test {
+        type RuntimeEvent = RuntimeEvent;
         type Currency = Balances;
         type WeightInfo = TestWeightInfo;
         type PotId = PotId;
@@ -530,6 +549,7 @@ mod tests {
         let initial_balance = 1_000_000;
         pallet_balances::GenesisConfig::<Test> {
             balances: vec![(Claims::account_id(), initial_balance)],
+            dev_accounts: None,
         }
         .assimilate_storage(&mut t)
         .unwrap();
